@@ -1,0 +1,7 @@
+proto,loss_pct,loss_method,status,game_seconds,rtt_samples,rtt_mean_ms,rtt_p95_ms,inter_update_mean_ms,inter_update_std_ms,inter_update_p99_ms,inter_update_max_ms,freezes_over_250ms,states_received,states_missing,states_missing_pct,states_late,client_retransmissions,server_retransmissions,reliable_gave_up,detect_ms,detect_how
+tcp,0,app,ok,120.0,238,0.881,1.409,100.0,2.6,105.0,113.1,0,2400,0,0.0,0,,,,0,FIN
+tcp,10,app,not measured: TCP needs OS-level loss (--loss-method os),120.0,,,,,,,,,,,,,,,,,
+tcp,30,app,not measured: TCP needs OS-level loss (--loss-method os),120.0,,,,,,,,,,,,,,,,,
+udp,0,app,ok,120.0,237,0.793,1.239,100.0,2.3,104.9,113.8,0,2400,0,0.0,0,0,0,0,4004,heartbeat timeout
+udp,10,app,ok,120.0,191,0.828,1.135,109.8,32.7,204.1,399.1,18,2185,215,9.0,0,2,4,0,4508,heartbeat timeout
+udp,30,app,ok,120.0,124,0.902,1.204,143.8,79.3,402.3,903.2,146,1667,730,30.5,0,9,39,0,4446,heartbeat timeout
