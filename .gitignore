@@ -13,6 +13,12 @@ metrics/raw/
 # Logs
 *.log
 
+# Packet captures (Wireshark/tcpdump) can be huge
+*.pcap
+*.pcapng
+*.cap
+captures/
+
 # OS / editors
 .DS_Store
 .idea/
