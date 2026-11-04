@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.venv/
+venv/
+env/
+
+# Raw metric samples; metrics/results.csv and metrics/charts/ are committed
+metrics/raw/
+
+# Logs
+*.log
+
+# OS / editors
+.DS_Store
+.idea/
+.vscode/
+
+# Claude Code local settings
+.claude/settings.local.json
+
+# Local test run logs
+logs/

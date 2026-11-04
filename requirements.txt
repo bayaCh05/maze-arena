@@ -1,0 +1,3 @@
+pygame-ce  # drop-in fork of pygame (import pygame); has wheels for Python 3.9-3.14
+pytest
+matplotlib
