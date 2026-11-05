@@ -2,6 +2,7 @@
 
 
 def make_transport(proto, host, port, drop=0.0):
+    """Connected TcpTransport or UdpTransport for --proto; the UI never sees the difference."""
     if proto == "tcp":
         if drop:
             raise ValueError("--drop only applies to UDP (TCP never loses data); "

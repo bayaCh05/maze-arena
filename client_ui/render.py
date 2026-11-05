@@ -39,10 +39,12 @@ STEPS = {"RIGHT": (1, 0), "LEFT": (-1, 0), "UP": (0, -1), "DOWN": (0, 1)}
 
 
 def window_size(maze):
+    """Window (width, height) in pixels for this maze: board + top bar + sidebar."""
     return len(maze[0]) * CELL + SIDE, TOP + len(maze) * CELL
 
 
 def player_rgb(setup, name):
+    """RGB of a player's color name from GAME_START."""
     return RGB.get(setup["colors"].get(name), TEXT)
 
 
@@ -55,6 +57,7 @@ class Fonts:
 
 
 def text(screen, font, msg, color, pos, anchor="topleft", shadow=True):
+    """Draw text anchored at pos (with a drop shadow); returns its rect."""
     img = font.render(str(msg), True, color)
     rect = img.get_rect(**{anchor: pos})
     if shadow:
@@ -64,11 +67,13 @@ def text(screen, font, msg, color, pos, anchor="topleft", shadow=True):
 
 
 def panel(screen, rect, color=PANEL, border=BORDER, radius=14):
+    """Rounded rectangle with a border (cards, dialogs)."""
     pygame.draw.rect(screen, color, rect, border_radius=radius)
     pygame.draw.rect(screen, border, rect, width=2, border_radius=radius)
 
 
 def button(screen, fonts, rect, label, hovered=False, color=ACCENT, enabled=True):
+    """Rounded button; lighter when hovered, greyed out when disabled."""
     rect = pygame.Rect(rect)
     if not enabled:
         fill, fg = PANEL_HI, DIM
@@ -117,6 +122,7 @@ def draw_pac(screen, color, center, radius, facing="RIGHT", mouth=0.3, eye=True)
 
 
 def glow(screen, color, center, radius, alpha):
+    """Translucent circle (halo around power pellets and powered players)."""
     surf = pygame.Surface((radius * 2, radius * 2), pygame.SRCALPHA)
     pygame.draw.circle(surf, (*color, alpha), (radius, radius), radius)
     screen.blit(surf, (center[0] - radius, center[1] - radius))
@@ -169,9 +175,11 @@ class GameView:
     # -------------------------------------------------------- geometry
 
     def cell_center(self, x, y):
+        """Pixel center of grid cell (x, y)."""
         return x * CELL + CELL // 2, TOP + y * CELL + CELL // 2
 
     def _wall_surface(self):
+        """Pre-draw the maze walls once; every frame just blits this surface."""
         w, h = self.cols * CELL, self.rows * CELL
         surf = pygame.Surface((w, h))
         surf.fill(BG)
@@ -243,6 +251,7 @@ class GameView:
         return events
 
     def _draw_pos(self, name, pos):
+        """Pixel position, gliding from the previous cell to the new one during one tick (cosmetic only)."""
         prev = self.prev_pos.get(name)
         if not prev or abs(prev[0] - pos[0]) + abs(prev[1] - pos[1]) != 1:
             return self.cell_center(*pos)                     # first frame or respawn: no glide
@@ -276,6 +285,7 @@ class GameView:
             screen.blit(img, img.get_rect(center=board.center))
 
     def _draw_pellets(self, screen, now):
+        """Pellets and blinking power pellets that are still in the last STATE."""
         for x, y in self.state["pellets"]:
             pygame.draw.circle(screen, PELLET, self.cell_center(x, y), 3)
         pulse = (math.sin(now * 6) + 1) / 2
@@ -285,6 +295,7 @@ class GameView:
             pygame.draw.circle(screen, (255, 248, 230), c, int(7 + 2 * pulse))
 
     def _draw_players(self, screen, fonts, now):
+        """Every player as a Pac-Man in their color; ours has a ring and a YOU label."""
         powered = self.state.get("powered", {})
         anyone_powered = {n for n, left in powered.items() if left}
         radius = CELL // 2 - 3
@@ -308,6 +319,7 @@ class GameView:
                  (c[0], c[1] - radius - 4), "midbottom")
 
     def _draw_effects(self, screen, fonts, now):
+        """Short cosmetic effects: floating score pop-ups and a burst where someone was eaten."""
         for f in list(self.floats):
             msg, color, x, y, t0 = f
             k = (now - t0) / 0.9
@@ -330,6 +342,7 @@ class GameView:
                                    max(1, int(5 * (1 - k))))
 
     def _draw_top_bar(self, screen, fonts, info, now):
+        """Title, time left, and the room / protocol on the right."""
         w = screen.get_width()
         pygame.draw.rect(screen, PANEL, (0, 0, w, TOP))
         pygame.draw.line(screen, BORDER, (0, TOP - 1), (w, TOP - 1), 2)
@@ -347,6 +360,7 @@ class GameView:
             text(screen, fonts.body, right, DIM, (w - 16, TOP // 2), "midright", shadow=False)
 
     def _draw_sidebar(self, screen, fonts, info):
+        """Scoreboard (rank, score, power bar), then the network lines (RTT, loss) and key hints."""
         x0 = self.cols * CELL
         side = pygame.Rect(x0, TOP, screen.get_width() - x0, screen.get_height() - TOP)
         pygame.draw.rect(screen, PANEL, side)

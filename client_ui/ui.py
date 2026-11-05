@@ -37,6 +37,8 @@ MEDALS = [(255, 205, 50), (200, 205, 220), (205, 127, 50)]
 
 
 class _Silent:
+    """Stand-in for Sfx when sound is off: same methods, does nothing."""
+
     muted = True
 
     def play(self, _name):
@@ -47,6 +49,8 @@ class _Silent:
 
 
 class App:
+    """All screens of the game window; talks to the server only through the Transport."""
+
     def __init__(self, transport, name=None, room=None, proto="tcp", sounds=None, subtitle=""):
         self.t = transport
         self.t.on_message(self.on_message)
@@ -73,12 +77,14 @@ class App:
             self.t.send(make_msg(LOGIN, name=name))
 
     def notify(self, text, color=TEXT, seconds=3.0):
+        """Show a short message (toast) at the top of the window."""
         self.toasts.append([text, color, time.monotonic() + seconds])
         self.toasts = self.toasts[-3:]
 
     # ------------------------------------------------------------ network
 
     def on_message(self, msg):
+        """Handle one server message (called from poll() in the pygame thread)."""
         t = msg["type"]
         if t == LOGIN_OK:
             self.me = msg["name"]
@@ -139,6 +145,7 @@ class App:
     # ------------------------------------------------------------ actions (keys and buttons)
 
     def submit_text(self):
+        """Enter in a text box: LOGIN with the typed name, or CREATE_ROOM + JOIN_ROOM."""
         value = self.text.strip()
         if not value:
             return
@@ -151,35 +158,44 @@ class App:
             self.typing, self.text = None, ""
 
     def start_create(self):
+        """Open the create-room dialog."""
         self.typing, self.text = "room", ""
 
     def cancel_create(self):
+        """Close the create-room dialog."""
         self.typing, self.text = None, ""
 
     def join(self, room):
+        """Ask to join a room (the answer is ROOM_UPDATE or ROOM_LIST with error)."""
         self.t.send(make_msg(JOIN_ROOM, room=room))
 
     def refresh(self):
+        """Ask for the room list again."""
         self.t.send(make_msg(LIST_ROOMS))
 
     def toggle_ready(self):
+        """Send READY with the opposite of our current ready flag."""
         ready = any(p["name"] == self.me and p["ready"] for p in self.players)
         self.t.send(make_msg(READY, ready=not ready))
 
     def leave_room(self):
+        """Leave the room and go back to the lobby screen."""
         self.t.send(make_msg(LEAVE_ROOM))
         self.room, self.players = None, []
         self.screen_name = "lobby"
 
     def back_to_room(self):
+        """From the game-over screen back to the room."""
         self.screen_name = "room"
 
     def quit(self):
+        """Close the window at the end of this frame."""
         self.quit_requested = True
 
     # ------------------------------------------------------------ input
 
     def on_click(self, pos):
+        """Run the action of the button under the mouse, if any."""
         for rect, action in self.buttons:
             if rect.collidepoint(pos):
                 self.sfx.play("click")
@@ -243,6 +259,7 @@ class App:
     # ------------------------------------------------------------ drawing
 
     def net_lines(self):
+        """HUD lines: protocol, RTT, and for UDP the share of lost STATE updates."""
         lines = [f"{self.proto.upper()}   RTT {self.t.rtt_ms:.0f} ms" if self.t.rtt_ms is not None
                  else f"{self.proto.upper()}   RTT ..."]
         lost, got = getattr(self.t, "states_lost", 0), getattr(self.t, "states_received", 0)
@@ -251,6 +268,7 @@ class App:
         return lines
 
     def btn(self, screen, fonts, rect, label, action, color=ACCENT, enabled=True):
+        """Draw a button and register its click action for this frame."""
         rect = pygame.Rect(rect)
         hovered = enabled and rect.collidepoint(pygame.mouse.get_pos())
         render.button(screen, fonts, rect, label, hovered, color, enabled)
@@ -258,6 +276,7 @@ class App:
             self.buttons.append((rect, action))
 
     def draw(self, screen, fonts):
+        """Draw the current screen."""
         self.buttons = []
         if not self.t.connected:
             self.draw_disconnected(screen, fonts)
@@ -277,6 +296,7 @@ class App:
         self.draw_toasts(screen, fonts)
 
     def draw_toasts(self, screen, fonts):
+        """Draw the short messages that are still visible."""
         now = time.monotonic()
         self.toasts = [t for t in self.toasts if t[2] > now]
         y = render.TOP + 14 if self.screen_name == "game" else 168
@@ -294,6 +314,7 @@ class App:
             y += box.height + 8
 
     def input_box(self, screen, fonts, rect, placeholder):
+        """Draw the text field with the typed text and a blinking cursor."""
         rect = pygame.Rect(rect)
         render.panel(screen, rect, BG, ACCENT, 12)
         cursor = "|" if int(time.monotonic() * 2.5) % 2 else ""
@@ -303,6 +324,7 @@ class App:
             render.text(screen, fonts.mid, placeholder, DIM, (rect.x + 18, rect.centery), "midleft", False)
 
     def draw_login(self, screen, fonts):
+        """Login screen: name field and PLAY button."""
         render.menu_background(screen, fonts, self.subtitle)
         w, h = screen.get_size()
         card = pygame.Rect(0, 0, 520, 290)
@@ -318,6 +340,7 @@ class App:
         render.key_hints(screen, fonts, [("Enter", "play"), ("Esc", "quit")], w // 2, h - 40)
 
     def draw_lobby(self, screen, fonts):
+        """Lobby screen: clickable room list, create / refresh buttons."""
         render.menu_background(screen, fonts, self.subtitle)
         w, h = screen.get_size()
         render.text(screen, fonts.mid, f"Hi {self.me}! Pick a room or create one.", TEXT, (w // 2, 190), "center")
@@ -353,6 +376,7 @@ class App:
             self.draw_create_dialog(screen, fonts)
 
     def draw_create_dialog(self, screen, fonts):
+        """Create-room dialog over the lobby."""
         w, h = screen.get_size()
         shade = pygame.Surface((w, h), pygame.SRCALPHA)
         shade.fill((0, 0, 0, 170))
@@ -368,6 +392,7 @@ class App:
         self.btn(screen, fonts, (card.right - 250, card.y + 175, 190, 54), "CANCEL", self.cancel_create, DIM)
 
     def draw_room(self, screen, fonts):
+        """Room screen: player cards with ready flags, READY and LEAVE buttons."""
         render.menu_background(screen, fonts, self.subtitle)
         w, h = screen.get_size()
         render.text(screen, fonts.big, f"Room {self.room}", TEXT, (w // 2, 196), "center")
@@ -402,6 +427,7 @@ class App:
                          w // 2, h - 40)
 
     def draw_over(self, screen, fonts):
+        """Game-over screen: podium, ranking and winner (or draw)."""
         render.menu_background(screen, fonts, self.subtitle)
         w, h = screen.get_size()
         winner = self.result["winner"]
@@ -429,6 +455,7 @@ class App:
         render.key_hints(screen, fonts, [("Enter", "back to the room"), ("Esc", "leave room")], w // 2, h - 40)
 
     def draw_disconnected(self, screen, fonts):
+        """Shown when the transport closed: the reason and how to quit."""
         render.menu_background(screen, fonts, self.subtitle)
         w, h = screen.get_size()
         card = pygame.Rect(0, 0, 620, 260)
@@ -444,12 +471,14 @@ class App:
 
 
 def window_icon():
+    """Small Pac-Man surface for the window icon."""
     icon = pygame.Surface((32, 32), pygame.SRCALPHA)
     render.draw_pac(icon, ACCENT, (16, 16), 14, "RIGHT", 0.6)
     return icon
 
 
 def main():
+    """Command line entry point: python -m client_ui.ui --proto tcp|udp --host H --port P."""
     parser = argparse.ArgumentParser(description="Maze Arena client")
     parser.add_argument("--proto", choices=["tcp", "udp"], default="tcp")
     parser.add_argument("--host", default="127.0.0.1")

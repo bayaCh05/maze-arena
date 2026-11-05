@@ -225,7 +225,7 @@ Output: `metrics/results.csv` + `metrics/charts/networks.png` (and `rtt_paths.*`
 | `tcp/` | TCP server (thread per client) and `TcpTransport` |
 | `udp/` | UDP server (one socket), `UdpTransport`, `reliability.py` (seq/ack/retransmit) |
 | `client_ui/` | pygame UI, renderer, headless bot, transport factory |
-| `netutil/` | server startup banner: this machine's IPv4 addresses and the client command |
+| `netutil/` | server startup banner (this machine's IPv4 addresses, client command), `--host` resolution, log/SIGTERM setup shared by both servers |
 | `scripts/` | `netcheck.py`: TCP/UDP reachability check with diagnosis; `tunnel_server.sh`, `tunnel_client.sh`/`.bat`: Cloudflare Tunnel; `playit_server.sh`: UDP via playit.gg |
 | `deploy/` | cloud VM: `setup_vm.sh`, systemd units for the TCP and UDP servers |
 | `metrics/` | benchmark, charts, results, macOS loss helper |

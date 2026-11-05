@@ -1,3 +1,5 @@
+"""common/game.py: movement, walls, pellets, power, eating, end of game, ranking, STATE size."""
+
 import json
 from collections import deque
 

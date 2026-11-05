@@ -11,14 +11,16 @@ ROOM_NAME_MAX = 16
 
 
 class RoomError(Exception):
-    pass
+    """A refused room request; the message is sent back to the client as ROOM_LIST.error."""
 
 
 def new_lobby():
+    """Empty lobby: rooms by name, and which room each player is in."""
     return {"rooms": {}, "player_room": {}}
 
 
 def create_room(lobby, room):
+    """Add an empty room; RoomError for a bad or existing name."""
     if (not isinstance(room, str) or not 1 <= len(room.strip()) <= ROOM_NAME_MAX
             or room != room.strip() or not room.isprintable()):
         raise RoomError("invalid room name")
@@ -37,6 +39,7 @@ def list_rooms(lobby):
 
 
 def join_room(lobby, room, name):
+    """Put the player in the room; RoomError if unknown, full, playing, or already in a room."""
     r = lobby["rooms"].get(room) if isinstance(room, str) else None
     if r is None:
         raise RoomError("no such room")
@@ -68,6 +71,7 @@ def leave_room(lobby, name):
 
 
 def set_ready(lobby, name, ready=True):
+    """Set the player's ready flag; returns their room. RoomError if not in a room or it's playing."""
     room = room_of(lobby, name)
     if room is None:
         raise RoomError("not in a room")
@@ -79,6 +83,7 @@ def set_ready(lobby, name, ready=True):
 
 
 def room_of(lobby, name):
+    """The player's room name, or None."""
     return lobby["player_room"].get(name)
 
 
@@ -91,6 +96,7 @@ def room_players(lobby, room):
 
 
 def can_start(lobby, room):
+    """True when the room is idle, has >= 2 players and all of them are ready."""
     r = lobby["rooms"].get(room)
     return (r is not None and not r["in_game"]
             and len(r["players"]) >= MIN_PLAYERS

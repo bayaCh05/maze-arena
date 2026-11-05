@@ -18,7 +18,6 @@ irrelevant):
 
 import argparse
 import logging
-import signal
 import queue
 import socket
 import threading
@@ -28,6 +27,7 @@ from common import game
 from common.protocol import HEARTBEAT_TIMEOUT, ProtocolError, TcpStreamBuffer, encode_tcp
 from common.server_core import GameServer
 from netutil.addresses import startup_banner
+from netutil.runtime import setup_logging, stop_on_sigterm
 
 log = logging.getLogger("tcp.server")
 
@@ -55,6 +55,7 @@ class ClientConn:
         return f"{self.name or '?'}@{self.addr}"
 
     def send(self, msg):
+        """Queue one message for the writer thread (never blocks the caller)."""
         if not self.alive:
             return
         try:
@@ -63,6 +64,7 @@ class ClientConn:
             self.close("send queue full (client not reading)")
 
     def close(self, reason):
+        """Close once (first reason wins) and wake up both threads of this connection."""
         with self._close_lock:
             if not self.alive:
                 return
@@ -79,6 +81,8 @@ class ClientConn:
 
 
 class Server:
+    """Listening socket + one reader and one writer thread per client, around a GameServer."""
+
     def __init__(self, host="0.0.0.0", port=5050, game_ticks=game.GAME_TICKS,
                  heartbeat_timeout=HEARTBEAT_TIMEOUT):
         self.host, self.port = host, port
@@ -104,6 +108,7 @@ class Server:
         return self.port
 
     def serve_forever(self):
+        """accept() loop: each new connection gets its reader and writer threads."""
         while self.running:
             try:
                 sock, addr = self.listener.accept()
@@ -120,6 +125,7 @@ class Server:
                 sock.close()
 
     def stop(self):
+        """Stop accepting, stop the games, close every connection."""
         self.running = False
         if self.listener:
             self.listener.close()
@@ -130,6 +136,7 @@ class Server:
             conn.close("server shutting down")
 
     def _add_connection(self, sock, addr):
+        """Register a new connection (or refuse it above MAX_CONNECTIONS) and start its threads."""
         # Small messages at 10/s: disable Nagle so STATE leaves immediately.
         sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
         sock.settimeout(SOCKET_TIMEOUT)
@@ -147,6 +154,7 @@ class Server:
     # ------------------------------------------------------------ per-client threads
 
     def _reader(self, conn):
+        """recv() -> framing buffer -> core.handle(); on any way out, the client is removed."""
         reason = None
         try:
             while conn.alive:
@@ -154,12 +162,12 @@ class Server:
                     data = conn.sock.recv(RECV_SIZE)
                 except socket.timeout:
                     continue
-                if not data:
+                if not data:                        # recv() == b"": the peer closed (FIN)
                     reason = "connection closed by peer (FIN)"
                     break
                 conn.last_seen = time.monotonic()
                 errors = conn.buffer.errors
-                messages = conn.buffer.feed(data)   # 0, 1 or many messages
+                messages = conn.buffer.feed(data)   # one recv() != one message: 0, 1 or many
                 if conn.buffer.errors > errors:
                     log.warning("%s sent %d malformed line(s), ignored", conn, conn.buffer.errors - errors)
                 for msg in messages:
@@ -190,6 +198,7 @@ class Server:
             conn.sock.close()
 
     def _writer(self, conn):
+        """Drain this client's queue with sendall(); a None in the queue means stop."""
         while True:
             data = conn.outbox.get()
             if data is None or not conn.alive:
@@ -204,6 +213,11 @@ class Server:
                 return
 
     def _watchdog(self):
+        """Close connections silent for more than heartbeat_timeout.
+
+        A crashed process gets a FIN/RST from its OS, but a frozen process or a
+        pulled cable sends nothing: without this check the connection stays open forever.
+        """
         while self.running:
             time.sleep(0.5)
             now = time.monotonic()
@@ -215,19 +229,8 @@ class Server:
                     conn.close(f"heartbeat timeout ({silent:.1f} s without a message)")
 
 
-def setup_logging(level):
-    logging.basicConfig(
-        level=level.upper(),
-        format="%(asctime)s.%(msecs)03d %(levelname)-5s [%(threadName)s] %(message)s",
-        datefmt="%Y-%m-%d %H:%M:%S",
-    )
-
-
-def _interrupt(signum, frame):
-    raise KeyboardInterrupt
-
-
 def main():
+    """Command line entry point: python -m tcp.server --port 5050."""
     parser = argparse.ArgumentParser(description="Maze Arena TCP server")
     parser.add_argument("--host", default="0.0.0.0")
     parser.add_argument("--port", type=int, default=5050)
@@ -245,9 +248,7 @@ def main():
     server.start()
     for line in startup_banner("tcp", args.host, server.port, args.public_ip):
         log.info("%s", line)
-    # `kill <pid>` (SIGTERM) shuts down like Ctrl-C. Note: background jobs of a
-    # non-interactive shell script start with SIGINT ignored, so scripts must use SIGTERM.
-    signal.signal(signal.SIGTERM, _interrupt)
+    stop_on_sigterm()
     try:
         server.serve_forever()
     except KeyboardInterrupt:

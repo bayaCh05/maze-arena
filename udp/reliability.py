@@ -15,7 +15,7 @@ Two channels share one UDP socket:
               (e.g. the server timed us out) and restarted: both directions
               start over at 1.
 
-  unreliable  STATE, INPUT, PING/PONG, HEARTBEAT, ACK. No transport fields,
+  unreliable  STATE, INPUT, PING/PONG, ACK. No transport fields,
               sent once, may be lost. STATE/INPUT are re-sent every tick anyway.
 
 No sockets here: the owner passes send_raw(data, addr) and feeds received
@@ -37,6 +37,8 @@ MAX_HELD = 256         # out-of-order reliable messages kept per peer
 
 
 class Stats:
+    """Counters for the metrics and the server's exit log."""
+
     def __init__(self):
         self.sent = 0               # datagrams handed to the network (incl. dropped)
         self.dropped = 0            # discarded by --drop
@@ -52,10 +54,13 @@ class Stats:
         self.out_of_window = 0      # seq absurdly far ahead: ignored
 
     def as_dict(self):
+        """All counters as a dict."""
         return dict(vars(self))
 
 
 class _Peer:
+    """Per-address state: our next seq + unACKed messages, and the next seq we expect from it."""
+
     def __init__(self, now):
         self.created = now
         self.next_seq = 1
@@ -66,6 +71,8 @@ class _Peer:
 
 
 class ReliableEndpoint:
+    """Both channels for one socket: reliable (seq/ACK/retransmit/in order) and unreliable."""
+
     def __init__(self, send_raw, drop=0.0, rto=RTO, max_retries=MAX_RETRIES,
                  gap_timeout=GAP_TIMEOUT, on_retransmit=None, on_give_up=None,
                  rng=None, clock=time.monotonic):
@@ -81,6 +88,7 @@ class ReliableEndpoint:
         self.lock = threading.Lock()
 
     def _peer(self, addr):
+        """State for this address, created on first use."""
         peer = self.peers.get(addr)
         if peer is None:
             peer = self.peers[addr] = _Peer(self.clock())
@@ -92,6 +100,7 @@ class ReliableEndpoint:
             self.peers.pop(addr, None)
 
     def pending_count(self, addr=None):
+        """Reliable messages still waiting for an ACK (used by the tests)."""
         with self.lock:
             peers = [self.peers.get(addr)] if addr else list(self.peers.values())
             return sum(len(p.pending) for p in peers if p)
@@ -115,6 +124,7 @@ class ReliableEndpoint:
             self._transmit(addr, data)
 
     def _transmit(self, addr, data):
+        """Hand one datagram to the socket, unless --drop decides to lose it."""
         self.stats.sent += 1
         if self.drop and self.rng.random() < self.drop:
             self.stats.dropped += 1
@@ -133,15 +143,17 @@ class ReliableEndpoint:
         """
         msg, meta = decode_udp(data)
         with self.lock:
-            if msg["type"] == ACK:
+            if msg["type"] == ACK:                      # our message `ack` arrived: stop resending it
                 peer = self.peers.get(addr)
                 if peer is not None and peer.pending.pop(meta.ack, None) is not None:
                     self.stats.acked += 1
                 return []
-            if not meta.rel or meta.seq is None:
+            if not meta.rel or meta.seq is None:        # unreliable (STATE, INPUT, PING): as is
                 return [msg]
 
-            self._transmit(addr, encode_udp(make_msg(ACK), ack=meta.seq))   # ACK every copy
+            # ACK every copy, duplicates too: if our first ACK was lost, the sender
+            # retransmitted, and only a new ACK makes it stop.
+            self._transmit(addr, encode_udp(make_msg(ACK), ack=meta.seq))
             peer = self._peer(addr)
             seq = meta.seq
             if seq == 1 and peer.expected > 1 and self.clock() - peer.created > self.gap_timeout:
@@ -149,6 +161,7 @@ class ReliableEndpoint:
                 self.stats.peer_resets += 1
                 peer = self.peers[addr] = _Peer(self.clock())
             if seq < peer.expected or seq in peer.held:
+                # Already delivered (or waiting): a retransmitted JOIN_ROOM must not join twice.
                 self.stats.duplicates += 1
                 return []
             if seq >= peer.expected + MAX_HELD:
@@ -156,12 +169,13 @@ class ReliableEndpoint:
                 # Holding it would later make us skip to it and drop real messages.
                 self.stats.out_of_window += 1
                 return []
-            peer.held[seq] = msg
+            peer.held[seq] = msg                        # deliver in seq order, holding early ones
             if seq != peer.expected:
                 self.stats.out_of_order += 1
             return self._release(peer)
 
     def _release(self, peer):
+        """Deliver held messages that are now in order (expected, expected+1, ...)."""
         out = []
         while peer.expected in peer.held:
             out.append(peer.held.pop(peer.expected))

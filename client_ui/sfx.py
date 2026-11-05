@@ -12,6 +12,7 @@ RATE = 22050
 
 
 def init():
+    """Ask pygame for a small, low-latency mixer; call before pygame.init()."""
     pygame.mixer.pre_init(RATE, -16, 1, 256)
 
 
@@ -44,6 +45,8 @@ SOUNDS = {
 
 
 class Sfx:
+    """The game's sound effects, generated at startup; play() is silent without audio."""
+
     def __init__(self):
         self.muted = False
         self.sounds = {}
@@ -61,9 +64,11 @@ class Sfx:
             self.sounds = {}                                        # no audio: play() is a no-op
 
     def play(self, name):
+        """Play a named sound unless muted."""
         if not self.muted and name in self.sounds:
             self.sounds[name].play()
 
     def toggle(self):
+        """Mute/unmute; returns the new muted state."""
         self.muted = not self.muted
         return self.muted

@@ -47,6 +47,8 @@ def write_metrics(path, proto, name, transport):
 
 
 class Bot:
+    """Headless player: logs in, joins, gets ready, wanders the maze until GAME_OVER."""
+
     def __init__(self, transport, name, room, players):
         self.t, self.name, self.room, self.players = transport, name, room, players
         self.log = logging.getLogger(name)
@@ -62,10 +64,12 @@ class Bot:
         self.t.send(make_msg(LOGIN, name=name))
 
     def join(self):
+        """Create the room (refused if it already exists, which is fine) and join it."""
         self.t.send(make_msg(CREATE_ROOM, room=self.room))
         self.t.send(make_msg(JOIN_ROOM, room=self.room))
 
     def on_message(self, msg):
+        """React to one server message (lobby flow, STATE steering, GAME_OVER)."""
         t = msg["type"]
         if t == LOGIN_OK:
             self.log.info("logged in")
@@ -115,6 +119,7 @@ class Bot:
             self.done = True
 
     def steer(self, x, y):
+        """Keep going straight; at a wall, or sometimes at random, turn to a free direction."""
         free = [d for d, (dx, dy) in STEP.items() if (x + dx, y + dy) not in self.walls]
         blocked = self.dir not in STEP or (x + STEP[self.dir][0], y + STEP[self.dir][1]) in self.walls
         if free and (blocked or random.random() < 0.15):
@@ -125,6 +130,7 @@ class Bot:
 
 
 def main():
+    """Command line entry point: python -m client_ui.bot --proto tcp|udp --name bot1."""
     parser = argparse.ArgumentParser(description="Maze Arena bot client")
     parser.add_argument("--proto", choices=["tcp", "udp"], default="tcp")
     parser.add_argument("--host", default="127.0.0.1")

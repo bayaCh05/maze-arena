@@ -26,7 +26,7 @@ Demo: **Friday 2026-11-13**, 1 server + 3 clients on 4 different computers.
    | `JOIN_ROOM {room}`, `LEAVE_ROOM`, `READY {ready}` | `ROOM_UPDATE {room, players}`, `PLAYER_LEFT {name}` |
    | `INPUT {dir}`                 | `GAME_START {room, maze, players, colors, tick_rate, max_ticks}`, `STATE {tick, positions, pellets, power_pellets, scores, powered}` |
    |                               | `GAME_OVER {ranking, winner}` (`winner` is `null` on a tie) |
-   | `PING {t}` (`HEARTBEAT` accepted, unused) | `PONG {t}`, `PLAYER_LEFT {name}`      |
+   | `PING {t}` (also the heartbeat)  | `PONG {t}`, `PLAYER_LEFT {name}`                  |
    | UDP only: `ACK {ack}` (both directions, transport layer) |                        |
 
    `PLAYER_LEFT` goes to the rest of the room on a leave, a disconnect or a timeout.
@@ -50,7 +50,8 @@ common/      game.py, protocol.py, rooms.py, transport.py, server_core.py
 tcp/         server.py, client.py             # TCP transport only (bytes <-> server_core)
 udp/         server.py, client.py, reliability.py  # UDP transport only + seq/ack/retransmit
 client_ui/   ui.py, render.py, bot.py, connect.py  # pygame UI, headless bot; connect.py picks the transport
-netutil/     addresses.py                     # server startup banner (local IPs, client command); uses socket, so not in common/
+netutil/     addresses.py                     # startup banner, resolve --host once, free_port; uses socket, so not in common/
+             runtime.py                       # both servers: log format, SIGTERM = Ctrl-C
 scripts/     netcheck.py                      # standalone TCP/UDP reachability check (stdlib only)
              tunnel_server.sh, tunnel_client.{sh,bat}   # Cloudflare Tunnel helpers, TCP (docs/cloudflare_tunnel.md)
              playit_server.sh                 # UDP server behind a playit.gg tunnel (docs/playit_udp.md)

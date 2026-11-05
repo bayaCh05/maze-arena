@@ -62,6 +62,7 @@ def parse_maze(rows):
 
 
 def new_game(player_names, maze=MAZE_MAP, max_ticks=GAME_TICKS):
+    """A fresh game dict: players on their spawn points, every pellet in place."""
     names = list(player_names)
     if not 1 <= len(names) <= MAX_PLAYERS:
         raise ValueError(f"need 1..{MAX_PLAYERS} players, got {len(names)}")
@@ -103,6 +104,7 @@ def set_direction(game, name, direction):
 
 
 def _respawn(player):
+    """Back to the spawn point without power."""
     # The direction is kept: the UDP client re-sends its last INPUT every 100 ms,
     # so resetting it here would only stop TCP players (rules must not depend on the transport).
     player["x"], player["y"] = player["spawn"]
@@ -110,6 +112,7 @@ def _respawn(player):
 
 
 def _eat(eater, victim):
+    """A powered player caught an unpowered one: the victim loses points and respawns."""
     victim["score"] = max(0, victim["score"] - EAT_PENALTY)
     _respawn(victim)
 
@@ -167,6 +170,7 @@ def tick(game):
 
 
 def _check_over(game):
+    """Over when time is up, no pellet is left, or at most one player remains."""
     no_pellets = not game["pellets"] and not game["power_pellets"]
     time_up = game["tick"] >= game["max_ticks"]
     alone = game["started_with"] >= 2 and len(game["players"]) <= 1
@@ -181,11 +185,8 @@ def remove_player(game, name):
 
 
 def is_over(game):
+    """True once the game has ended (set by tick() or remove_player())."""
     return game["over"]
-
-
-def ticks_left(game):
-    return max(0, game["max_ticks"] - game["tick"])
 
 
 def get_state(game):

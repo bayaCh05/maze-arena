@@ -35,6 +35,7 @@ plt.rcParams.update({
 
 
 def num(v):
+    """CSV cell -> float, or None if empty / not a number."""
     try:
         return float(v)
     except (TypeError, ValueError):
@@ -45,6 +46,7 @@ NETWORK_ORDER = ["loopback", "lan", "cloudflare", "playit"]
 
 
 def network(row):
+    """The row's network; rows from before that column are loopback."""
     return row.get("network") or "loopback"     # rows written before the network column
 
 
@@ -58,10 +60,12 @@ def load(method):
 
 
 def measured(row):
+    """True for a row with real numbers (status ok)."""
     return row is not None and row["status"] == "ok"
 
 
 def finish(fig, ax, title, subtitle, name):
+    """Title, subtitle, layout, save to metrics/charts/<name>."""
     ax.set_title(title, loc="left", fontsize=13, fontweight="bold", color=INK, pad=22)
     ax.text(0, 1.02, subtitle, transform=ax.transAxes, fontsize=9, color=INK2, va="bottom")
     fig.tight_layout()
@@ -72,21 +76,25 @@ def finish(fig, ax, title, subtitle, name):
 
 
 def loss_axis(ax, losses):
+    """x axis labelled "N % loss"."""
     ax.set_xticks(range(len(losses)), [f"{l} % loss" for l in losses])
     ax.tick_params(axis="x", length=0)
 
 
 def not_measured(ax, x, y, proto):
+    """Grey "not measured" note where a bar would be."""
     ax.text(x, y, f"{LABEL[proto]}\nnot measured", ha="center", va="bottom", fontsize=8, color=INK2)
 
 
 def bars(ax, x, value, proto, label_text):
+    """One bar with a value label on top."""
     ax.bar(x, value, WIDTH, color=COLOR[proto], edgecolor=SURFACE, linewidth=2, label=LABEL[proto])
     ax.annotate(label_text, (x, value), xytext=(0, 3), textcoords="offset points",
                 ha="center", va="bottom", fontsize=8, color=INK)
 
 
 def legend(ax, protos):
+    """TCP / UDP color legend."""
     from matplotlib.patches import Patch
     ax.legend(handles=[Patch(color=COLOR[p], label=LABEL[p]) for p in protos],
               loc="upper left", ncols=2, fontsize=9)
@@ -95,6 +103,7 @@ def legend(ax, protos):
 # ---------------------------------------------------------------- charts
 
 def chart_rtt(losses, by, suffix):
+    """RTT by protocol and loss (mean bar, p95 tick)."""
     fig, ax = plt.subplots(figsize=(7.5, 4.2))
     top = max([num(r["rtt_p95_ms"]) or 0 for r in by.values() if measured(r)] or [1])
     for i, loss in enumerate(losses):
@@ -119,6 +128,7 @@ def chart_rtt(losses, by, suffix):
 
 
 def inter_update_samples(proto, method, loss):
+    """Raw inter-update samples (ms) of alice and bob for one run."""
     samples = []
     for name in ("alice", "bob"):
         path = RAW / f"{proto}_{method}_loss{loss:02d}_{name}.csv"
@@ -129,6 +139,7 @@ def inter_update_samples(proto, method, loss):
 
 
 def chart_inter_update(losses, by, method, suffix):
+    """Distribution of time between STATEs (box plot) by protocol and loss."""
     fig, ax = plt.subplots(figsize=(7.5, 4.6))
     top = 0
     for i, loss in enumerate(losses):
@@ -166,6 +177,7 @@ def chart_inter_update(losses, by, method, suffix):
 
 
 def chart_udp(losses, by, suffix):
+    """UDP only: missing STATE ticks and reliable retransmissions by loss."""
     rows = [(l, by.get(("udp", l))) for l in losses]
     rows = [(l, r) for l, r in rows if measured(r)]
     if not rows:
@@ -204,6 +216,7 @@ def chart_udp(losses, by, suffix):
 
 
 def chart_detection(losses, by, suffix):
+    """Time from SIGKILL of a client to the server's PLAYER_LEFT."""
     fig, ax = plt.subplots(figsize=(7.5, 4.2))
     top = 5
     for i, loss in enumerate(losses):
@@ -309,6 +322,7 @@ def chart_networks():
 
 
 def main():
+    """Redraw every chart from results.csv (and rtt_paths.csv if present)."""
     chart_rtt_paths()
     chart_networks()
     with open(METRICS / "results.csv") as f:

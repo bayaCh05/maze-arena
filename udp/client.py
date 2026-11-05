@@ -29,6 +29,8 @@ TIMER_STEP = 0.05
 
 
 class UdpTransport(Transport):
+    """Client side of the UDP version: one socket, a receive thread and a timer thread."""
+
     def __init__(self, host, port, drop=0.0, server_timeout=SERVER_TIMEOUT):
         super().__init__()
         self.host, self.port = host, port
@@ -70,12 +72,14 @@ class UdpTransport(Transport):
 
     @property
     def stats(self):
+        """Reliability counters plus STATE received / lost / late."""
         s = self.endpoint.stats.as_dict() if self.endpoint else {}
         s.update(states_received=self.states_received, states_lost=self.states_lost,
                  states_late=self.states_late)
         return s
 
     def send(self, msg):
+        """Send one message; the last INPUT is remembered so the timer can repeat it."""
         if not self.connected:
             return False
         if msg["type"] == INPUT:
@@ -86,6 +90,7 @@ class UdpTransport(Transport):
         return True
 
     def close(self):
+        """Best-effort LEAVE_ROOM (UDP has no FIN), then stop the threads."""
         if self.connected:
             self.endpoint.send(self.peer, make_msg(LEAVE_ROOM))   # best effort, no wait
         self._shutdown("closed by client")
@@ -93,6 +98,7 @@ class UdpTransport(Transport):
     # ------------------------------------------------------------ threads
 
     def _recv_loop(self):
+        """recv() -> reliability layer (ACK, dedupe, order) -> _accept()."""
         while not self._closed.is_set():
             try:
                 data = self.sock.recv(65535)
@@ -112,9 +118,12 @@ class UdpTransport(Transport):
                 self._accept(msg)
 
     def _accept(self, msg):
+        """Last check before the UI: drop stale STATEs, count missing ticks."""
         t = msg["type"]
         if t == STATE:
             tick = msg.get("tick", 0)
+            # Datagrams can be reordered: a STATE older than the one already shown
+            # would move players backwards, so it is discarded (newest wins).
             if tick <= self.last_tick:
                 self.states_late += 1               # older than what we showed: discard
                 if tick in self._missing:           # ...but it did arrive: late, not lost
@@ -135,6 +144,7 @@ class UdpTransport(Transport):
         self._deliver(msg)
 
     def _timer_loop(self):
+        """Every 50 ms: retransmissions, PING each second, repeat INPUT each tick, server-silence check."""
         next_ping = next_input = 0
         while not self._closed.wait(TIMER_STEP):
             for _addr, msg in self.endpoint.tick():
@@ -150,10 +160,12 @@ class UdpTransport(Transport):
                 self._shutdown(f"server silent for {self.server_timeout:.0f} s")
 
     def _on_give_up(self, _addr, mtype, seq):
+        """A reliable message was never ACKed: only fatal if the server is also silent."""
         if time.monotonic() - self.last_rx > 2.0:
             self._shutdown(f"server not answering ({mtype} never acknowledged)")
 
     def _shutdown(self, reason):
+        """Mark closed (once) and close the socket; the UI reads close_reason."""
         if self._closed.is_set():
             return
         self._closed.set()

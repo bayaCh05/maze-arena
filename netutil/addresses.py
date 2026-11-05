@@ -25,6 +25,7 @@ def _primary_ip():
 
 
 def _run(cmd):
+    """Output of an OS command, or "" if it fails or takes more than 2 s."""
     try:
         out = subprocess.run(cmd, capture_output=True, timeout=2, check=False)
         return out.stdout.decode(errors="replace")
@@ -65,6 +66,7 @@ def _from_os():
 
 
 def _from_hostname():
+    """IPv4 addresses the OS resolver gives for our own host name (fallback)."""
     try:
         return [ai[4][0] for ai in socket.getaddrinfo(socket.gethostname(), None, socket.AF_INET)]
     except OSError:
@@ -72,6 +74,7 @@ def _from_hostname():
 
 
 def _kind(addr):
+    """Human label for an address: Tailscale, LAN / private, or public."""
     if addr in TAILSCALE:
         return "Tailscale"
     return "LAN / private" if addr.is_private else "public"
@@ -96,6 +99,20 @@ def local_ipv4_addresses():
         result.append((ip, ", ".join(parts)))
     result.sort(key=lambda r: (r[0] != primary, r[0]))
     return result
+
+
+def free_port():
+    """A port number that is free for BOTH TCP and UDP right now (tests, benchmark)."""
+    while True:
+        with socket.socket() as t:
+            t.bind(("", 0))
+            port = t.getsockname()[1]
+        try:
+            with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as u:
+                u.bind(("", port))
+            return port
+        except OSError:
+            continue                    # the UDP twin is taken: try another number
 
 
 def resolve_ipv4(host, port, proto="udp"):

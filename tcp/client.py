@@ -20,6 +20,8 @@ from netutil.addresses import resolve_ipv4
 
 
 class TcpTransport(Transport):
+    """Client side of the TCP version: one connection, a receive thread and a ping thread."""
+
     def __init__(self, host, port, connect_timeout=5.0):
         super().__init__()
         self.host, self.port = host, port
@@ -45,6 +47,7 @@ class TcpTransport(Transport):
         return self
 
     def send(self, msg):
+        """Send one message as a JSON line; False if the connection is gone."""
         if not self.connected:
             return False
         try:
@@ -56,9 +59,11 @@ class TcpTransport(Transport):
             return False
 
     def close(self):
+        """Close the connection (the server sees a FIN at once)."""
         self._shutdown("closed by client")
 
     def _recv_loop(self):
+        """recv() -> framing buffer -> _deliver(); ends on FIN, error, or 5 s of silence."""
         buffer = TcpStreamBuffer()
         try:
             while True:
@@ -74,10 +79,12 @@ class TcpTransport(Transport):
             self._shutdown(f"connection lost: {exc}")
 
     def _ping_loop(self):
+        """PING {t} every second: RTT measurement and heartbeat for the server."""
         while not self._closed.wait(PING_INTERVAL):
             self.send(make_msg(PING, t=time.monotonic()))
 
     def _shutdown(self, reason):
+        """Mark closed (once) and close the socket; the UI reads close_reason."""
         if self._closed.is_set():
             return
         self._closed.set()

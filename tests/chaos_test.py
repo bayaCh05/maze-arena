@@ -30,6 +30,7 @@ from common.protocol import (  # noqa: E402
     READY, ROOM_LIST, ROOM_UPDATE, encode_udp, make_msg,
 )
 from client_ui.connect import make_transport  # noqa: E402
+from netutil.addresses import free_port  # noqa: E402
 
 PY = sys.executable
 GAME_SECONDS = 25
@@ -76,20 +77,6 @@ class Proc:
                 self.popen.kill()
                 self.popen.wait()
         self.log_file.close()
-
-
-def free_port():
-    """A port free for both TCP and UDP."""
-    while True:
-        with socket.socket() as t:
-            t.bind(("", 0))
-            port = t.getsockname()[1]
-        try:
-            with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as u:
-                u.bind(("", port))
-            return port
-        except OSError:
-            continue
 
 
 # ---------------------------------------------------------------- hostile traffic

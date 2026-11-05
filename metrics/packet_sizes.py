@@ -36,17 +36,21 @@ GAME_TICKS = 60
 
 
 class Recorder:
+    """Collects (proto, direction, type, phase, bytes) for every message seen."""
+
     def __init__(self):
         self.rows = []            # (proto, direction, type, phase, bytes)
         self.lock = threading.Lock()
         self.phase = "lobby"
 
     def add(self, proto, direction, msg_type, size, phase=None):
+        """Record one message size."""
         with self.lock:
             self.rows.append((proto, direction, msg_type, phase or self.phase, size))
 
 
 def state_phase(tick, max_ticks):
+    """start / middle / end label for a STATE tick (None for other ticks)."""
     if tick <= 1:
         return "start"
     if tick == max_ticks // 2:
@@ -57,6 +61,7 @@ def state_phase(tick, max_ticks):
 
 
 def run_udp(names, rec):
+    """Real UDP server + 3 raw clients with their own reliability layer; measure every datagram."""
     from udp.server import Server
     srv = Server("127.0.0.1", 0, game_ticks=GAME_TICKS)
     srv.start()
@@ -86,6 +91,7 @@ def recv_udp(c, rec):
 
 
 def run_tcp(names, rec):
+    """Real TCP server + 3 raw clients; measure every line."""
     from tcp.server import Server
     srv = Server("127.0.0.1", 0, game_ticks=GAME_TICKS)
     srv.start()
@@ -113,6 +119,7 @@ def recv_tcp(c, rec):
 
 
 def phase_of(msg, rec):
+    """Game phase a received message belongs to."""
     if msg["type"] == STATE:
         return state_phase(msg["tick"], GAME_TICKS) or "game"
     if msg["type"] == GAME_START:
@@ -123,6 +130,7 @@ def phase_of(msg, rec):
 
 
 def play(clients, rec, proto, send, recv):
+    """The scripted session: login, room, ready, random INPUTs until GAME_OVER."""
     by_sock = {c[1]: c for c in clients}
 
     def pump(seconds=0.3):
@@ -173,6 +181,7 @@ def summarize(rows):
 
 
 def main():
+    """Measure both protocols, write packet_sizes.csv, print the table and warnings."""
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--unicode-names", action="store_true")
     parser.add_argument("--out", type=Path, default=OUT)

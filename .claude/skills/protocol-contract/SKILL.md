@@ -74,7 +74,7 @@ starts the game). After GAME_OVER the room returns to the lobby state
 {"type": "INPUT", "dir": "UP"}
 ```
 `dir` ∈ `"UP" | "DOWN" | "LEFT" | "RIGHT" | "NONE"`. INPUT is the **only**
-thing a client sends during a game (besides PING/HEARTBEAT). The server keeps
+thing a client sends during a game (besides PING). The server keeps
 the latest dir per player and applies it at the next tick.
 
 ```json
@@ -107,14 +107,12 @@ A player who gets eaten respawns and keeps their direction.
 ```json
 {"type": "PING", "t": 183.4521}
 {"type": "PONG", "t": 183.4521}
-{"type": "HEARTBEAT"}
-{"type": "PONG"}
 {"type": "PLAYER_LEFT", "name": "bob"}
 ```
 - `PING.t` = sender's `time.monotonic()`; `PONG` echoes it unchanged, so RTT
   is computed by the pinger only (clocks of different machines are not compared).
-- Clients send `PING` every 1 s (`PING_INTERVAL`); it doubles as the heartbeat.
-  `HEARTBEAT` is also accepted and answered with `PONG` (no `t`).
+- Clients send `PING` every 1 s (`PING_INTERVAL`); it doubles as the heartbeat
+  (there is no separate HEARTBEAT message). A PING without `t` gets a PONG without `t`.
 - `PLAYER_LEFT` is sent to the remaining room members when a client leaves,
   disconnects, or times out. Timeouts: TCP 5 s both ways
   (`protocol.HEARTBEAT_TIMEOUT`); UDP server 4 s, UDP client 10 s (see below).
@@ -180,7 +178,7 @@ Delivery classes (UDP) — `protocol.RELIABLE_TYPES`:
     arrive in any order.
 - **Unreliable, newest wins**: STATE (client drops `tick` ≤ last tick, counts
   gaps), INPUT (UDP client re-sends the current dir every 100 ms in a game),
-  PING/PONG/HEARTBEAT, ACK.
+  PING/PONG, ACK.
 
 Liveness (UDP): clients PING every 1 s; the server drops a client silent for
 **4 s** (`udp.server.HEARTBEAT_TIMEOUT`). Clients give up on a server silent for

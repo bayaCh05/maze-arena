@@ -1,12 +1,11 @@
 """scripts/netcheck.py against real servers, and the server startup banner."""
 
-import socket
 import subprocess
 import sys
 import threading
 from pathlib import Path
 
-from netutil.addresses import local_ipv4_addresses, startup_banner
+from netutil.addresses import free_port, local_ipv4_addresses, startup_banner
 from tcp.server import Server as TcpServer
 from udp.server import Server as UdpServer
 
@@ -16,12 +15,6 @@ NETCHECK = Path(__file__).resolve().parent.parent / "scripts" / "netcheck.py"
 def netcheck(*args):
     out = subprocess.run([sys.executable, str(NETCHECK), *args], capture_output=True, text=True, timeout=30)
     return out.returncode, out.stdout
-
-
-def free_port():
-    with socket.socket() as s:
-        s.bind(("127.0.0.1", 0))
-        return s.getsockname()[1]
 
 
 def test_netcheck_ok_against_both_servers():

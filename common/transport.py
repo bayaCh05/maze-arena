@@ -15,6 +15,8 @@ from common.protocol import PONG, STATE
 
 
 class Transport:
+    """Base class of TcpTransport and UdpTransport: inbox queue, callbacks, RTT bookkeeping."""
+
     def __init__(self):
         self._callbacks = []
         self._inbox = queue.Queue()
@@ -32,6 +34,7 @@ class Transport:
         raise NotImplementedError
 
     def close(self):
+        """Close the connection / socket and stop the network threads."""
         raise NotImplementedError
 
     def on_message(self, callback):

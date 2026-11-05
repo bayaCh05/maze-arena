@@ -1,3 +1,5 @@
+"""common/rooms.py: create, join, leave, ready, start conditions and refused requests."""
+
 import pytest
 
 from common import rooms as r

@@ -33,15 +33,18 @@ TIMEOUT_HELP = [
 
 
 def hint(lines):
+    """Print indented advice lines under a FAIL."""
     for line in lines:
         print("      " + line)
 
 
 def ping_msg(seq):
+    """A PING whose t is a sequence number, so each PONG can be matched to its PING."""
     return {"type": "PING", "t": seq}
 
 
 def check_tcp(host, port, timeout, count):
+    """Connect + PING/PONG over TCP; prints a diagnosis (refused / timeout / no route); True if OK."""
     print(f"[TCP] connecting to {host}:{port} ...")
     t0 = time.perf_counter()
     try:
@@ -103,6 +106,7 @@ def check_tcp(host, port, timeout, count):
 
 
 def check_udp(host, port, timeout, count):
+    """PING/PONG datagrams; prints a diagnosis; True if at least one PONG came back."""
     print(f"[UDP] PING x{count} to {host}:{port} ...")
     try:
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -163,6 +167,7 @@ def check_udp(host, port, timeout, count):
 
 
 def main():
+    """Resolve --host once, run the checks, exit 0 only if every requested protocol works."""
     parser = argparse.ArgumentParser(description="Check the network path to a Maze Arena server")
     parser.add_argument("--host", required=True,
                         help="server IP or hostname (e.g. the playit.gg address), resolved once")

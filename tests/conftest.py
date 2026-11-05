@@ -1,3 +1,5 @@
+"""pytest setup: make `import common...` work from any directory."""
+
 import sys
 from pathlib import Path
 

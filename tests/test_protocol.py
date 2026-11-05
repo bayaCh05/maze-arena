@@ -1,3 +1,5 @@
+"""common/protocol.py: encode/decode, TCP framing buffer, UDP transport fields, hostile input."""
+
 import pytest
 
 from common import protocol as p
@@ -53,7 +55,7 @@ def test_tcp_three_messages_in_one_recv():
 
 def test_tcp_two_and_a_half_messages_then_rest():
     buf = p.TcpStreamBuffer()
-    msgs = [p.make_msg(p.PING, t=1.5), p.make_msg(p.HEARTBEAT), p.make_msg(p.LEAVE_ROOM)]
+    msgs = [p.make_msg(p.PING, t=1.5), p.make_msg(p.LIST_ROOMS), p.make_msg(p.LEAVE_ROOM)]
     stream = b"".join(p.encode_tcp(m) for m in msgs)
     cut = len(stream) - 5
     assert buf.feed(stream[:cut]) == msgs[:2]

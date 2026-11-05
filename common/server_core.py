@@ -17,7 +17,7 @@ import time
 
 from common import game, rooms
 from common.protocol import (
-    CREATE_ROOM, GAME_OVER, GAME_START, HEARTBEAT, INPUT, JOIN_ROOM, LEAVE_ROOM,
+    CREATE_ROOM, GAME_OVER, GAME_START, INPUT, JOIN_ROOM, LEAVE_ROOM,
     LIST_ROOMS, LOGIN, LOGIN_FAIL, LOGIN_OK, PING, PLAYER_LEFT, PONG, READY,
     ROOM_LIST, ROOM_UPDATE, STATE, make_msg, valid_name,
 )
@@ -34,6 +34,7 @@ class GameRunner(threading.Thread):
         self.stopped = False
 
     def run(self):
+        """Tick at a fixed rate (sleep until the next 100 ms slot) until the game is over."""
         log = self.server.log
         period = 1 / game.TICK_RATE
         next_t = time.monotonic()
@@ -62,6 +63,8 @@ class GameRunner(threading.Thread):
 
 
 class GameServer:
+    """Lobby, rooms and running games of one server; the transport calls handle() and disconnect()."""
+
     def __init__(self, game_ticks=game.GAME_TICKS, log=None):
         self.game_ticks = game_ticks
         self.log = log or logging.getLogger("server")
@@ -71,6 +74,7 @@ class GameServer:
         self.games = {}             # room -> GameRunner
 
     def stop(self):
+        """Stop every running game (server shutdown)."""
         with self.lock:
             for runner in self.games.values():
                 runner.stopped = True
@@ -80,7 +84,7 @@ class GameServer:
     def handle(self, session, msg):
         """Process one message from a session. Never raises for bad input."""
         t = msg["type"]
-        if t in (PING, HEARTBEAT):              # no lock needed, answer fast
+        if t == PING:                           # no lock needed, answer fast; works before LOGIN too
             session.send(make_msg(PONG, t=msg["t"]) if "t" in msg else make_msg(PONG))
             return
         with self.lock:
@@ -111,6 +115,7 @@ class GameServer:
                 self.log.warning("%s sent unexpected %s, ignored", session, t)
 
     def _on_login(self, session, msg):
+        """LOGIN: accept a valid, unused name, else LOGIN_FAIL with the reason."""
         name = msg.get("name")
         if session.name is not None:
             session.send(make_msg(LOGIN_FAIL, reason="already logged in"))
@@ -127,6 +132,7 @@ class GameServer:
             self.log.info("LOGIN %s", session)
 
     def _on_create_room(self, session, msg):
+        """CREATE_ROOM: add an empty room and show it to everyone in the lobby."""
         room = msg.get("room")
         try:
             rooms.create_room(self.lobby, room)
@@ -139,6 +145,7 @@ class GameServer:
             session.send(self._room_list())
 
     def _on_join_room(self, session, msg):
+        """JOIN_ROOM: enter a room (refused if full, running, or already in one)."""
         room = msg.get("room")
         try:
             rooms.join_room(self.lobby, room, session.name)
@@ -150,6 +157,7 @@ class GameServer:
         self._broadcast_room_list()
 
     def _on_ready(self, session, msg):
+        """READY: mark the player (un)ready; start the game when everyone is ready."""
         try:
             ready = msg.get("ready", True) is not False      # only a real false un-readies
             room = rooms.set_ready(self.lobby, session.name, ready)
@@ -162,6 +170,7 @@ class GameServer:
             self._start_game(room)
 
     def _on_input(self, session, msg):
+        """INPUT: store the direction; the game thread applies it at the next tick."""
         room = rooms.room_of(self.lobby, session.name)
         runner = self.games.get(room)
         if runner is not None:
@@ -170,10 +179,12 @@ class GameServer:
     # ------------------------------------------------------------ rooms & games
 
     def _members(self, room):
+        """Sessions of the players in this room."""
         names = [p["name"] for p in rooms.room_players(self.lobby, room)]
         return [self.clients[n] for n in names if n in self.clients]
 
     def _room_list(self, error=None):
+        """A ROOM_LIST message, with `error` when it answers a refused request."""
         msg = make_msg(ROOM_LIST, rooms=rooms.list_rooms(self.lobby))
         if error:
             msg["error"] = error
@@ -187,11 +198,13 @@ class GameServer:
                 session.send(msg)
 
     def _send_room_update(self, room):
+        """ROOM_UPDATE (players + ready flags) to everyone in the room."""
         msg = make_msg(ROOM_UPDATE, room=room, players=rooms.room_players(self.lobby, room))
         for session in self._members(room):
             session.send(msg)
 
     def _start_game(self, room):
+        """Create the game, send GAME_START to the room, start its tick thread."""
         names = rooms.start_game(self.lobby, room)
         runner = GameRunner(self, room, names, self.game_ticks)
         self.games[room] = runner

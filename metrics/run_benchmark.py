@@ -50,6 +50,9 @@ from datetime import datetime
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT))
+from netutil.addresses import free_port  # noqa: E402
+
 PY = sys.executable
 METRICS = ROOT / "metrics"
 RAW = METRICS / "raw"
@@ -82,25 +85,14 @@ def pct(values, q):
     return s[lo] + (s[hi] - s[lo]) * (k - lo)
 
 
-def free_port():
-    while True:
-        with socket.socket() as t:
-            t.bind(("", 0))
-            port = t.getsockname()[1]
-        try:
-            with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as u:
-                u.bind(("", port))
-            return port
-        except OSError:
-            continue
-
-
 def start(args, log_path):
+    """Start `python -m <args>` in the repo root with output to log_path."""
     f = open(log_path, "w")
     return subprocess.Popen([PY, "-u", "-m", *args], cwd=ROOT, stdout=f, stderr=subprocess.STDOUT), f
 
 
 def wait_text(path, needle, timeout):
+    """Wait until a log file contains `needle` (True) or the timeout passes (False)."""
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         if needle in path.read_text(errors="replace"):
@@ -115,6 +107,7 @@ def log_time(line):
 
 
 def read_raw(path):
+    """A bot's raw metrics CSV -> {metric: [values]}."""
     rows = {}
     if path.exists():
         with open(path) as f:
@@ -124,6 +117,7 @@ def read_raw(path):
 
 
 def netloss(*args):
+    """Run metrics/netloss_mac.sh with sudo (kernel-level loss on lo0)."""
     cmd = ["sudo", "-n", "sh", str(NETLOSS), *map(str, args)]
     res = subprocess.run(cmd, capture_output=True, text=True)
     if res.returncode != 0:
@@ -267,7 +261,6 @@ RTT_FIELDS = ["network", "proto", "host", "port", "sent", "samples", "lost_pct",
 
 def measure_rtt(proto, host, port, count, interval, timeout=2.0):
     """PING {t} -> PONG against a running server; returns the RTTs in ms (lost pings left out)."""
-    sys.path.insert(0, str(ROOT))
     from common.protocol import (PING, PONG, ProtocolError, TcpStreamBuffer, decode_udp, encode_tcp,
                                  encode_udp, make_msg)
 
@@ -318,6 +311,7 @@ def measure_rtt(proto, host, port, count, interval, timeout=2.0):
 
 
 def save_rtt_path(row):
+    """Merge one --rtt-only row into rtt_paths.csv (same network+proto is replaced)."""
     old = []
     if RTT_PATHS.exists():
         with open(RTT_PATHS) as f:
@@ -331,6 +325,7 @@ def save_rtt_path(row):
 
 
 def run_rtt_path(args):
+    """--rtt-only: PING the server N times per protocol, save and print the stats."""
     for proto in args.protos:
         print(f"== RTT {args.network} ({proto}) -> {args.host}:{args.port}, {args.count} pings every {args.interval} s")
         try:
@@ -377,6 +372,7 @@ def save(rows):
 
 
 def main():
+    """Command line: local loss benchmark, or --host for a server on a real network."""
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--protos", nargs="+", default=["tcp", "udp"], choices=["tcp", "udp"])
     parser.add_argument("--loss", nargs="+", type=float, default=[0.0, 0.1, 0.3])

@@ -24,9 +24,8 @@ INPUT = "INPUT"
 STATE = "STATE"
 GAME_OVER = "GAME_OVER"
 # Liveness
-PING = "PING"
+PING = "PING"                 # also the heartbeat: clients send one every second
 PONG = "PONG"
-HEARTBEAT = "HEARTBEAT"
 PLAYER_LEFT = "PLAYER_LEFT"
 # UDP transport only (never reaches the game layer)
 ACK = "ACK"
@@ -35,7 +34,7 @@ GAME_TYPES = frozenset({
     LOGIN, LOGIN_OK, LOGIN_FAIL,
     LIST_ROOMS, CREATE_ROOM, ROOM_LIST, JOIN_ROOM, LEAVE_ROOM, READY, ROOM_UPDATE,
     GAME_START, INPUT, STATE, GAME_OVER,
-    PING, PONG, HEARTBEAT, PLAYER_LEFT,
+    PING, PONG, PLAYER_LEFT,
 })
 ALL_TYPES = GAME_TYPES | {ACK}
 
@@ -65,6 +64,7 @@ class ProtocolError(Exception):
 
 
 def make_msg(msg_type, **fields):
+    """Build a message dict {"type": msg_type, **fields}; unknown types raise ProtocolError."""
     if msg_type not in ALL_TYPES:
         raise ProtocolError(f"unknown message type: {msg_type!r}")
     msg = {"type": msg_type}
@@ -73,11 +73,13 @@ def make_msg(msg_type, **fields):
 
 
 def valid_name(name):
+    """Player/room name rule: 1-12 printable characters, no leading/trailing spaces."""
     return (isinstance(name, str) and 1 <= len(name.strip()) <= NAME_MAX
             and name == name.strip() and name.isprintable())
 
 
 def encode(msg):
+    """Message dict -> compact UTF-8 JSON bytes (shared by TCP and UDP)."""
     return json.dumps(msg, separators=(",", ":"), allow_nan=False).encode("utf-8")
 
 
@@ -86,6 +88,7 @@ def _reject_constant(name):
 
 
 def decode(data):
+    """JSON bytes -> message dict; raises ProtocolError for anything that isn't a valid message."""
     try:
         # parse_constant: Python's json accepts NaN/Infinity, which we could not re-encode.
         msg = json.loads(data.decode("utf-8"), parse_constant=_reject_constant)
@@ -120,6 +123,10 @@ class TcpStreamBuffer:
         self.errors = 0
 
     def feed(self, data):
+        """Add received bytes; return the complete messages they finish (0, 1 or many)."""
+        # Example: recv() gives b'{"type":"PI' -> no newline yet, keep it, return [].
+        # Next recv() gives b'NG","t":1}\n{"type"' -> the first line is now complete:
+        # return [PING]; the start of the next message waits in the buffer.
         self._buf += data
         messages = []
         while b"\n" in self._buf:
@@ -130,7 +137,7 @@ class TcpStreamBuffer:
                 messages.append(decode(line))
             except ProtocolError:
                 self.errors += 1
-        if len(self._buf) > self.max_size:
+        if len(self._buf) > self.max_size:          # a peer that never sends "\n" can't fill our memory
             raise ProtocolError("line too long without newline")
         return messages
 
