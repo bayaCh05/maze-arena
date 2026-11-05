@@ -62,13 +62,13 @@ sudo ufw allow 5050/tcp && sudo ufw allow 5050/udp               # Ubuntu (ufw)
 sudo firewall-cmd --add-port=5050/tcp --add-port=5050/udp        # Fedora (firewalld, until reboot)
 ```
 
-**Check from each client before the audience arrives** (expect a PONG line back):
+**Check from each client before the audience arrives** (same command on macOS and Windows):
 ```bash
-echo '{"type":"PING","t":1}' | nc -w 2 S_IP 5050        # TCP
-echo '{"type":"PING","t":1}' | nc -u -w 2 S_IP 5050     # UDP (only a PONG proves UDP works)
+python scripts/netcheck.py --host S_IP --port 5050     # TCP + UDP PING/PONG, RTT, diagnosis on failure
 ```
-Windows without nc: `Test-NetConnection S_IP -Port 5050` (TCP only). Otherwise just start
-the client: if it reaches the lobby, it works.
+Both lines must say `OK, ready to play`. Without the repo, on macOS/Linux:
+`echo '{"type":"PING","t":1}' | nc -w 2 S_IP 5050` (TCP) and the same with `nc -u` (UDP;
+only a PONG proves UDP works).
 
 More troubleshooting: [cross_network.md → Troubleshooting checklist](cross_network.md#troubleshooting-checklist).
 
@@ -96,7 +96,7 @@ Say:
 
 | Who | Do |
 |---|---|
-| C | crash carol: macOS/Linux `pkill -9 -f client_ui.ui` · Windows `taskkill /F /IM python.exe` (kills every Python on C) |
+| C | crash carol: macOS/Linux `pkill -9 -f client_ui.ui` · Windows: Task Manager → python.exe → End task, or `taskkill /F /IM python.exe` (kills every Python on C) |
 
 Say:
 - S's log: `PLAYER_LEFT carol … (connection closed by peer (FIN))`, detected **within milliseconds**:
@@ -188,7 +188,8 @@ The TCP 10 % / 30 % rows of `metrics/results.csv` are empty until you run
   `python -m client_ui.ui --proto tcp --name alice --room demo` (host defaults to
   127.0.0.1) plus two bots: `python -m client_ui.bot --proto tcp --name bob --room demo --players 3`
   and the same for carol. The whole script still works, apart from it being one machine.
-- **Port 5050 busy on S** → `lsof -nP -i :5050` (macOS/Linux) to find the old server,
+- **Port 5050 busy on S** → `lsof -nP -i :5050` (macOS/Linux) or `netstat -ano | findstr :5050`
+  (Windows) to find the old server,
   or use `--port 5051` everywhere. (On a Mac never use 5000: AirPlay.)
 - **"name already taken"** after a crash → wait 5 s (TCP) / 4 s (UDP heartbeat) or pick another name.
 

@@ -24,6 +24,7 @@ import time
 from common import game
 from common.protocol import ProtocolError
 from common.server_core import GameServer
+from netutil.addresses import startup_banner
 from udp.reliability import ReliableEndpoint
 
 log = logging.getLogger("udp.server")
@@ -190,6 +191,8 @@ def main():
     parser.add_argument("--heartbeat-timeout", type=float, default=HEARTBEAT_TIMEOUT)
     parser.add_argument("--drop", type=float, default=0.0,
                         help="fraction of OUTGOING datagrams to drop (loss simulation)")
+    parser.add_argument("--public-ip", help="only printed in the startup banner: the address players "
+                        "on other networks use (e.g. the cloud VM's public IP); never bound")
     parser.add_argument("--log-level", default="INFO")
     args = parser.parse_args()
 
@@ -201,6 +204,8 @@ def main():
     server = Server(args.host, args.port, int(args.game_seconds * game.TICK_RATE),
                     args.heartbeat_timeout, args.drop)
     server.start()
+    for line in startup_banner("udp", args.host, server.port, args.public_ip):
+        log.info("%s", line)
     # `kill <pid>` (SIGTERM) shuts down like Ctrl-C. Note: background jobs of a
     # non-interactive shell script start with SIGINT ignored, so scripts must use SIGTERM.
     signal.signal(signal.SIGTERM, _interrupt)

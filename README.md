@@ -22,12 +22,33 @@ the same game logic, **TCP-only** and **UDP-only**, to compare the two transport
 
 ## Install
 
+macOS / Linux:
+
 ```bash
 git clone https://github.com/bayaCh05/maze-arena.git && cd maze-arena
-python3 -m venv .venv              # Windows: py -m venv .venv
-source .venv/bin/activate          # Windows: .venv\Scripts\activate
+python3 -m venv .venv
+source .venv/bin/activate
 pip install -r requirements.txt
 ```
+
+Windows (PowerShell):
+
+```powershell
+git clone https://github.com/bayaCh05/maze-arena.git; cd maze-arena
+py -m venv .venv
+.venv\Scripts\Activate.ps1          # cmd.exe: .venv\Scripts\activate.bat
+pip install -r requirements.txt
+```
+
+- Install Python from python.org with **"Add python.exe to PATH"** ticked. `python` from the
+  Microsoft Store alias (it opens the Store) is not the one you want; `py` always works.
+- PowerShell refuses `Activate.ps1` ("running scripts is disabled")? Once:
+  `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`. Or skip activation and call the
+  venv's Python directly: `.venv\Scripts\python -m client_ui.ui ...`.
+- If `pip install` starts **compiling** pygame-ce ("Building wheel for pygame-ce"), your Python
+  is newer than the published wheels: install Python 3.12 or 3.13 and recreate the venv.
+- After activation the commands below are the same on every OS (`python -m ...`;
+  forward slashes like `scripts/netcheck.py` work on Windows too).
 
 The repository is **private**: every machine that clones it needs access. Either
 add the person as a collaborator on GitHub, or log in once with `gh auth login`
@@ -59,6 +80,32 @@ python -m client_ui.ui --proto udp --host <server-ip> --port 5050 --drop 0.3
 The TCP and UDP servers can run **at the same time on the same port number**
 (they're different ports to the OS). All players of one game use the same `--proto`.
 
+**Where do clients connect?** At startup each server prints all this machine's IPv4
+addresses (LAN, Tailscale, ...) and the exact client command to copy:
+
+```
+Players connect to ONE of these addresses (the one on their network):
+  192.168.1.23     en0, LAN / private, default route
+Client command to copy (change the name):
+  python -m client_ui.ui --proto udp --host 192.168.1.23 --port 5050 --name alice --room demo
+```
+
+On a cloud VM, pass `--public-ip X` so the banner shows the address players outside use.
+
+### Check the network path first
+
+On each player laptop, before starting the game:
+
+```bash
+python scripts/netcheck.py --host <server-ip> --port 5050
+```
+
+It tests a TCP connect + PING/PONG and a UDP PING/PONG with the real server (no login,
+no game), prints the RTT, and on failure says what is most likely wrong:
+**REFUSED** (machine reachable, server not running or wrong port), **TIMEOUT** (wrong IP,
+firewall on the server, Wi-Fi client isolation), **NO ROUTE**, or "TCP works but UDP
+doesn't" (UDP firewall rule). Standard library only; macOS, Linux and Windows.
+
 ### In the game
 
 Login (or `--name`) → lobby: **C** create room, **↑/↓ + Enter** join, **L** refresh →
@@ -87,6 +134,7 @@ python local_demo.py [--bot]                     # offline, no network: try the 
 | `--players N` | bot | `2` | bot sends READY once N players are in the room |
 | `--game-seconds S` | servers | `120` | game length (shorter for rehearsals) |
 | `--heartbeat-timeout S` | servers | TCP `5`, UDP `4` | silence before a client counts as disconnected |
+| `--public-ip IP` | servers | – | only printed in the startup banner (cloud VM's public IP); never bound |
 | `--log-level` | servers | `INFO` | `DEBUG` also logs every UDP retransmission |
 | `--metrics-csv PATH` | bot | – | write RTT / STATE timing samples (used by the benchmark) |
 
@@ -95,6 +143,24 @@ To make TCP lose segments you need OS-level loss, see [metrics/netloss_mac.sh](m
 and [docs/demo_checklist.md](docs/demo_checklist.md).
 
 On macOS avoid port **5000** (AirPlay Receiver listens there).
+
+## Windows: commands that differ
+
+Everything with `python -m ...`, `python scripts/...` and `python tests/...` is the same.
+These are not:
+
+| What | macOS / Linux | Windows (PowerShell) |
+|---|---|---|
+| create / activate the venv | `python3 -m venv .venv` · `source .venv/bin/activate` | `py -m venv .venv` · `.venv\Scripts\Activate.ps1` |
+| this machine's IP | `ipconfig getifaddr en0` · Linux `hostname -I` | `ipconfig` ("IPv4 Address"); or read the server's banner |
+| public IP (cross-network proof) | `curl -4 ifconfig.me` | `curl.exe -4 ifconfig.me` |
+| crash one client (kill test) | `pkill -9 -f client_ui.ui` | `Get-CimInstance Win32_Process -Filter "Name='python.exe'" \| Where-Object CommandLine -match 'client_ui' \| ForEach-Object { Stop-Process -Id $_.ProcessId -Force }` (or `taskkill /F /IM python.exe`: kills **every** Python on that PC) |
+| freeze a client (heartbeat test) | `kill -STOP <pid>` / `kill -CONT <pid>` | no built-in equivalent: do this test from a Mac/Linux client |
+| stop a server | Ctrl-C, or `pkill -f tcp.server` | Ctrl-C (wakes up within 1 s), or close the window |
+| who uses port 5050? | `lsof -nP -i :5050` | `netstat -ano \| findstr :5050` then `taskkill /PID <pid> /F` |
+| test TCP/UDP reachability | `python scripts/netcheck.py ...` (or `nc`) | `python scripts/netcheck.py ...` (no `nc` on Windows) |
+| server firewall | macOS: "accept incoming connections" → Allow | Defender prompt: allow **Private** networks, and set the Wi-Fi to *Private* |
+| TCP under kernel loss | `metrics/netloss_mac.sh` (macOS), `tc netem` (Linux) | not supported; use a Mac or Linux server for that part |
 
 ## Tests
 
@@ -125,8 +191,9 @@ and retransmissions (UDP), and disconnection detection time. Output:
 
 ## Documentation
 
+- [docs/demo_day_sheet.md](docs/demo_day_sheet.md): one page for demo day (roles, commands per laptop, order, plan B)
 - [docs/demo_checklist.md](docs/demo_checklist.md): the 4-computer demo, step by step, with the live script
-- [docs/cross_network.md](docs/cross_network.md): server on a cloud VM or over Tailscale
+- [docs/cross_network.md](docs/cross_network.md): server on a cloud VM (`deploy/setup_vm.sh`) or over Tailscale
 - `CLAUDE.md`: project rules (message contract, authoritative server, ...)
 
 ## Layout
@@ -137,6 +204,9 @@ and retransmissions (UDP), and disconnection detection time. Output:
 | `tcp/` | TCP server (thread per client) and `TcpTransport` |
 | `udp/` | UDP server (one socket), `UdpTransport`, `reliability.py` (seq/ack/retransmit) |
 | `client_ui/` | pygame UI, renderer, headless bot, transport factory |
+| `netutil/` | server startup banner: this machine's IPv4 addresses and the client command |
+| `scripts/` | `netcheck.py`: TCP/UDP reachability check with diagnosis |
+| `deploy/` | cloud VM: `setup_vm.sh`, systemd units for the TCP and UDP servers |
 | `metrics/` | benchmark, charts, results, macOS loss helper |
 | `tests/` | pytest suite + chaos test |
 | `docs/` | demo checklist, cross-network setup |

@@ -11,7 +11,8 @@ Two ways:
 
 Facts that make this simple:
 
-- The **servers use only the Python standard library**: no `pip install` on the VM.
+- The **servers use only the Python standard library** (the setup script still makes a venv,
+  for pytest and the scripts).
 - The TCP and UDP servers can run **at the same time on the same port number**
   (TCP 5050 and UDP 5050 are different ports), so both versions are always available.
 - Default port in this doc: **5050** for both TCP and UDP. (Avoid 5000 if a Mac is the
@@ -44,152 +45,167 @@ Facts that make this simple:
 ssh ubuntu@PUBLIC_IP          # default user on Oracle Ubuntu images is "ubuntu"
 ```
 
-### A2. Install Python and get the code onto the VM
+### A2. Get the code onto the VM
+
+The repo is **private**, so the VM can't clone it without credentials. Easiest: copy it
+from a laptop (run this **on the laptop**, from the folder that contains `maze-arena`):
 
 ```bash
-sudo apt update && sudo apt install -y python3 git netcat-openbsd tcpdump
-python3 --version             # 3.10+ is fine (24.04 has 3.12)
-```
-
-Get the project there, one of:
-
-```bash
-# a) from GitHub (push it first from the laptop: git remote add origin ...; git push -u origin main)
-git clone https://github.com/<you>/maze-arena.git ~/maze-arena
-
-# b) or copy straight from the laptop (run this ON THE LAPTOP, from the folder above maze-arena)
 rsync -av --exclude .venv --exclude logs --exclude metrics/raw maze-arena ubuntu@PUBLIC_IP:~/
 ```
 
-Quick local check on the VM (no dependencies needed):
+Or clone on the VM: `git clone https://github.com/bayaCh05/maze-arena.git` asks for your
+GitHub user name and a **personal access token** as password (GitHub → Settings →
+Developer settings → Personal access tokens → fine-grained, read-only access to this repo).
+
+### A3. Run the setup script (packages, venv, services, VM firewall)
 
 ```bash
-cd ~/maze-arena
-python3 -m tcp.server --port 5050      # Ctrl-C to stop; should log "listening on 0.0.0.0:5050 (TCP)"
+ssh ubuntu@PUBLIC_IP
+bash ~/maze-arena/deploy/setup_vm.sh                 # add --dry-run first to see every command
 ```
 
-(Only if you want to run the tests on the VM: `sudo apt install -y python3-venv`,
-`python3 -m venv .venv && .venv/bin/pip install pytest`. pygame/matplotlib are not needed on the server.)
+It is safe to run again (after new code: `git pull` or rsync, then run it again). It does:
 
-### A3. Open the ports: TWO firewalls, both must allow it
+1. `apt-get install` python3, python3-venv, git, curl, iproute2, netcat-openbsd, tcpdump.
+2. Uses the code in `~/maze-arena` (`git pull` if it is a clone).
+3. Creates `~/maze-arena/.venv` (the servers need only the standard library; pytest is
+   installed so you can run the tests on the VM; `--all-deps` installs everything).
+4. Asks `ifconfig.me` for the public IP (or `--public-ip X`), so the server banner shows it.
+5. Installs **two systemd services** from [deploy/](../deploy/):
+   `maze-arena-tcp` and `maze-arena-udp`, `Restart=always` (back 2 s after a crash or a
+   reboot), logs in the journal. It also disables the old `maze-arena@tcp/udp` template
+   units from earlier versions of this doc (same port).
+6. Opens the port in the **VM's own firewall**, TCP and UDP (details in A4-2).
+7. Self-test on the VM: both services active, `ss` shows the sockets, and
+   `scripts/netcheck.py` gets a PONG over TCP and UDP from `127.0.0.1`.
 
-A packet from a player crosses **(1) Oracle's cloud firewall** and then **(2) the VM's
-own firewall**. Forgetting either one gives the same symptom (timeouts), so do both.
+Options: `--port N` (default 5050), `--public-ip X`, `--server-args "--game-seconds 30"`
+(short rehearsal games), `--no-firewall`, `--dry-run`, `--help`.
 
-**(1) Cloud: the subnet's Security List** (or a Network Security Group if you use one)
+Tested in an Ubuntu 24.04 container with systemd and Oracle's iptables rules: the
+REJECT blocked players until step 6, then TCP and UDP worked from outside, survived
+`kill -9` and a reboot, and a second run changed nothing.
 
-Console → **Networking → Virtual cloud networks →** your VCN → **Subnets →** the public
-subnet → **Security Lists → Default Security List → Add Ingress Rules**. Add two rules:
+### A4. Open the ports: TWO firewalls, both must allow it, for TCP AND UDP
+
+A player's packet crosses **(1) the cloud provider's firewall**, then **(2) the VM's own
+firewall**. Forgetting either one gives the same symptom (timeouts), so do both.
+`--port` 5050 below; use yours.
+
+**(1) Cloud firewall: only from the cloud console/CLI, not from inside the VM**
+
+*Oracle Cloud (Security List)*: Console → **Networking → Virtual cloud networks →** your
+VCN → **Subnets →** the public subnet → **Security Lists → Default Security List →
+Add Ingress Rules**. Two rules:
 
 | Source CIDR | IP Protocol | Source port | Destination port | Description |
 |---|---|---|---|---|
 | `0.0.0.0/0` | TCP | (empty = all) | `5050` | Maze Arena TCP |
 | `0.0.0.0/0` | UDP | (empty = all) | `5050` | Maze Arena UDP |
 
-Optional, for `ping` tests: ICMP, type `8` (echo request). Oracle does **not** allow
-ping by default, so a failing ping means nothing until you add this.
+(If the instance uses a **Network Security Group** instead, add the same two rules there.)
+Optional, for `ping` tests: ICMP type `8`; Oracle blocks ping by default, so a failing
+ping means nothing until you add it. Tighter: instead of `0.0.0.0/0`, each player's
+public IP as `x.x.x.x/32` (`curl -4 ifconfig.me` on each laptop).
 
-Tighter alternative: instead of `0.0.0.0/0`, put each player's public IP
-(`curl -4 ifconfig.me` on each laptop) as `x.x.x.x/32`.
+*AWS (Security Group of the instance)*:
+```bash
+aws ec2 authorize-security-group-ingress --group-id sg-XXXX --protocol tcp --port 5050 --cidr 0.0.0.0/0
+aws ec2 authorize-security-group-ingress --group-id sg-XXXX --protocol udp --port 5050 --cidr 0.0.0.0/0
+```
 
-**(2) On the VM: iptables (Oracle's Ubuntu images)**
+*Google Cloud*:
+```bash
+gcloud compute firewall-rules create maze-arena --direction=INGRESS --action=ALLOW \
+    --rules=tcp:5050,udp:5050 --source-ranges=0.0.0.0/0
+```
 
-Oracle's Ubuntu images come with their own iptables rules that **REJECT everything
-except SSH**. New rules must go **before** that REJECT line:
+**(2) The VM's own firewall** (the setup script does this; here is what it runs)
+
+Oracle's Ubuntu images come with iptables rules that **REJECT everything except SSH**
+(the client sees "No route to host"). New rules must go **above** that REJECT line:
 
 ```bash
-sudo iptables -L INPUT --line-numbers                  # look: there's a REJECT near the end
+sudo iptables -L INPUT --line-numbers                  # there's a REJECT near the end
 N=$(sudo iptables -L INPUT --line-numbers | awk '/REJECT/ {print $1; exit}')
-sudo iptables -I INPUT "$N" -p tcp --dport 5050 -m state --state NEW -j ACCEPT
+sudo iptables -I INPUT "$N" -p tcp --dport 5050 -j ACCEPT
 sudo iptables -I INPUT "$N" -p udp --dport 5050 -j ACCEPT
 sudo netfilter-persistent save                         # survive reboots (/etc/iptables/rules.v4)
 sudo iptables -L INPUT --line-numbers                  # the two ACCEPTs must be ABOVE the REJECT
 ```
 
-Undo later: `sudo iptables -D INPUT -p tcp --dport 5050 -m state --state NEW -j ACCEPT`,
-`sudo iptables -D INPUT -p udp --dport 5050 -j ACCEPT`, then `sudo netfilter-persistent save`.
+Undo: `sudo iptables -D INPUT -p tcp --dport 5050 -j ACCEPT`,
+`sudo iptables -D INPUT -p udp --dport 5050 -j ACCEPT`, `sudo netfilter-persistent save`.
 
-**ufw instead?** On Oracle images, stick to the iptables commands above: they already manage
-iptables, and enabling ufw on top replaces those rules (an easy way to lock yourself
-out of SSH). On other providers or your own Ubuntu box, ufw is the normal tool:
+On Oracle images don't enable ufw on top (it replaces those rules: an easy way to lock
+yourself out of SSH). On other Ubuntu VMs with ufw active, the script runs instead:
 
 ```bash
-sudo ufw allow OpenSSH          # FIRST, or enabling ufw cuts your SSH session
-sudo ufw allow 5050/tcp
-sudo ufw allow 5050/udp
-sudo ufw enable && sudo ufw status
+sudo ufw allow 5050/tcp && sudo ufw allow 5050/udp      # (ufw allow OpenSSH first if you enable ufw)
 ```
 
-### A4. Run the server
+AWS/GCP Ubuntu images have no VM firewall by default: only the cloud rule is needed.
 
-**Option 1: nohup (quick)**
+### A5. Day-to-day on the VM
 
 ```bash
-cd ~/maze-arena
-nohup python3 -m tcp.server --port 5050 > tcp_server.log 2>&1 &
-nohup python3 -m udp.server --port 5050 > udp_server.log 2>&1 &
-tail -f tcp_server.log udp_server.log          # watch events (Ctrl-C stops tail, not the servers)
-pkill -f "tcp.server"; pkill -f "udp.server"   # stop (SIGTERM: clean shutdown, prints stats)
+journalctl -u maze-arena-tcp -u maze-arena-udp -f        # live log, every event timestamped
+journalctl -u maze-arena-udp --since "10 min ago"
+sudo systemctl restart maze-arena-tcp maze-arena-udp     # e.g. after new code
+sudo systemctl stop maze-arena-tcp maze-arena-udp        # after the demo
+ss -ltnup | grep 5050                                     # tcp LISTEN + udp UNCONN on 0.0.0.0:5050
 ```
 
-nohup servers do not come back after a VM reboot.
+The first lines of each service's log are the startup banner: the public IP, the local
+addresses and the exact client command to copy.
 
-**Option 2: systemd service (survives reboots and crashes; recommended for demo day)**
+### A6. Connect the clients
 
-One template unit serves both versions (`%i` = `tcp` or `udp`):
-
-```bash
-sudo tee /etc/systemd/system/maze-arena@.service > /dev/null <<'EOF'
-[Unit]
-Description=Maze Arena %i server
-After=network-online.target
-Wants=network-online.target
-
-[Service]
-User=ubuntu
-WorkingDirectory=/home/ubuntu/maze-arena
-ExecStart=/usr/bin/python3 -u -m %i.server --host 0.0.0.0 --port 5050
-Restart=on-failure
-RestartSec=2
-
-[Install]
-WantedBy=multi-user.target
-EOF
-sudo systemctl daemon-reload
-sudo systemctl enable --now maze-arena@tcp maze-arena@udp
-systemctl status maze-arena@tcp maze-arena@udp --no-pager
-```
-
-Daily use:
+On each player laptop (repo + venv as in the README), **check the path first**:
 
 ```bash
-journalctl -u maze-arena@tcp -f                 # live log (all events are timestamped)
-journalctl -u maze-arena@udp --since "10 min ago"
-sudo systemctl restart maze-arena@udp           # e.g. after pulling new code
-sudo systemctl stop maze-arena@tcp maze-arena@udp
-ss -ltnup | grep 5050                           # expect tcp LISTEN and udp UNCONN on 0.0.0.0:5050
-```
-
-Short games for rehearsal: add `--game-seconds 30` to `ExecStart` (then `daemon-reload` + `restart`).
-
-### A5. Connect the clients
-
-On each player laptop (repo cloned, venv with `pip install -r requirements.txt`):
-
-```bash
+python scripts/netcheck.py --host PUBLIC_IP --port 5050       # TCP connect + PING/PONG, UDP PING/PONG, RTT
 python -m client_ui.ui --proto tcp --host PUBLIC_IP --port 5050 --name alice --room demo
 python -m client_ui.ui --proto udp --host PUBLIC_IP --port 5050 --name bob   --room demo
 ```
 
-All players of one game must use the **same** `--proto` (the TCP and UDP servers are
-separate, with separate lobbies). Headless test player: `python -m client_ui.bot --proto tcp --host PUBLIC_IP --port 5050 --name bot1 --room demo --players 3`.
+All players of one game must use the **same** `--proto` (separate servers, separate
+lobbies). Headless test player:
+`python -m client_ui.bot --proto tcp --host PUBLIC_IP --port 5050 --name bot1 --room demo --players 3`.
 
-Why UDP works through home routers: each client sends first (LOGIN, then a PING every
-second), so its router creates a NAT mapping and lets the server's replies back in.
-The 1 s PING also keeps that mapping from expiring. The server only ever replies to
-the address a datagram came from, and never needs to reach a client first.
+After the demo: stop the services and delete the ingress rules (or terminate the VM).
 
-After the demo: stop the services and delete the two ingress rules (or terminate the VM).
+### A7. Explaining the setup (bonus slide)
+
+- **Topology**: the server runs on a cloud VM with a **public IPv4 address**
+  (Oracle actually gives the VM a private `10.0.x.x` and NATs the public IP 1:1 to it).
+  It listens on **5050/TCP and 5050/UDP** on all interfaces (`0.0.0.0`). Two firewalls
+  allow exactly those two ports: the cloud Security List and the VM's iptables.
+- **The clients are behind NAT** (home router, phone hotspot, campus network). They are
+  never reachable from outside, and they don't need to be: **every flow is started by
+  the client**.
+  - TCP: the client opens the connection (SYN out), so its NAT creates a mapping and
+    the server's replies come back on the same connection.
+  - UDP has no connection: the client's first datagram (LOGIN) creates the NAT mapping
+    `client private ip:port ↔ router public ip:port`. The server only ever **replies to
+    the address a datagram came from** (`recvfrom` → `sendto`), never to a configured
+    client address.
+  - **NAT mappings for UDP expire** after roughly 30 s to a few minutes of silence. Our
+    client sends a **PING every second** (also the heartbeat), so the mapping stays
+    alive for the whole game. Without it, a player idle in the lobby would stop
+    receiving after the router's timeout.
+  - So no port forwarding and no NAT traversal tricks are needed. The only inbound
+    ports are on the server, which has a public IP.
+- **Proof that the clients are on different networks**: on each client laptop, live:
+  ```bash
+  curl -4 ifconfig.me          # Windows (PowerShell): curl.exe -4 ifconfig.me
+  ```
+  Three **different public IPs** = three different networks (e.g. home Wi-Fi, phone
+  hotspot over 4G, campus). The server log shows the same thing from the other side:
+  `CONNECT 81.x.x.x:51234` / `NEW PEER 37.x.x.x:60212`: the address after NAT, one per
+  network. `scripts/netcheck.py` on each laptop shows the real RTT (tens of ms across
+  the internet, against ~1 ms on loopback).
 
 ---
 
@@ -239,16 +255,18 @@ Work from the server outwards; each step isolates one layer.
    echo '{"type":"PING","t":1}' | nc -w 2 127.0.0.1 5050      # TCP → {"type":"PONG","t":1}
    echo '{"type":"PING","t":1}' | nc -u -w 2 127.0.0.1 5050   # UDP → {"type":"PONG","t":1}
    ```
-3. **Does it answer from a laptop?** Same two commands with `PUBLIC_IP` instead of
-   `127.0.0.1`. A PONG over UDP is the **only** real UDP test:
+3. **Does it answer from a laptop?** Run `python scripts/netcheck.py --host PUBLIC_IP --port 5050`:
+   it tests TCP and UDP with real PING/PONGs and prints a diagnosis (refused, timeout,
+   no route) for each. Without the repo, the same two `nc` commands with `PUBLIC_IP`
+   instead of `127.0.0.1` work too. A PONG over UDP is the **only** real UDP test:
    - `nc -zv PUBLIC_IP 5050` is a valid TCP test ("succeeded" = TCP handshake done).
    - `nc -zvu PUBLIC_IP 5050` proves **nothing**: UDP has no handshake, and it prints
      "succeeded" even for a closed port (we checked).
    - Windows PowerShell (TCP only): `Test-NetConnection PUBLIC_IP -Port 5050`.
 4. **Nothing comes back? Find which firewall eats it.** On the VM run
    `sudo tcpdump -ni any port 5050` and repeat step 3:
-   - packets **don't show up** → cloud Security List (A3-1), the wrong IP, or the client's network blocks the port;
-   - packets **show up but no reply** → VM iptables/ufw (A3-2) or the server isn't running.
+   - packets **don't show up** → cloud Security List (A4-1), the wrong IP, or the client's network blocks the port;
+   - packets **show up but no reply** → VM iptables/ufw (A4-2) or the server isn't running.
 5. **`ping PUBLIC_IP` fails?** Normal on Oracle unless you added the ICMP type 8 rule.
    Ping is a reachability hint only; it says nothing about TCP/UDP 5050.
 6. **Right address?** Use the *public* IP from the console, never the VM's private

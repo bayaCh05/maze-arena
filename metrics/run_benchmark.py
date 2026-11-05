@@ -27,7 +27,6 @@ import argparse
 import ast
 import csv
 import platform
-import signal
 import socket
 import statistics
 import subprocess
@@ -150,7 +149,7 @@ def run_one(proto, loss, method, game_seconds, kill_after, port):
             return row
         time.sleep(kill_after)
         kill_ts = time.time()
-        procs["carol"].send_signal(signal.SIGKILL)
+        procs["carol"].kill()                       # SIGKILL (Windows: TerminateProcess)
         for name in ("alice", "bob"):
             try:
                 procs[name].wait(game_seconds + 30)
@@ -160,7 +159,7 @@ def run_one(proto, loss, method, game_seconds, kill_after, port):
         for p in procs.values():
             if p.poll() is None:
                 p.kill()
-        server.send_signal(signal.SIGTERM)          # prints reliability stats on the way out
+        server.terminate()                          # SIGTERM: prints reliability stats on the way out
         try:
             server.wait(5)
         except subprocess.TimeoutExpired:

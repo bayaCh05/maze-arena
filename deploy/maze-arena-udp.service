@@ -1,0 +1,25 @@
+# Maze Arena UDP server. Installed by deploy/setup_vm.sh, which fills in @USER@, @DIR@,
+# @PORT@ and @EXTRA_ARGS@. Logs: journalctl -u maze-arena-udp -f
+[Unit]
+Description=Maze Arena UDP game server (port @PORT@/udp)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=@USER@
+WorkingDirectory=@DIR@
+Environment=PYTHONUNBUFFERED=1
+ExecStart=@DIR@/.venv/bin/python -m udp.server --host 0.0.0.0 --port @PORT@@EXTRA_ARGS@
+# Crash, kill -9 or reboot: back in 2 s. SIGTERM is a clean shutdown (prints reliability stats).
+Restart=always
+RestartSec=2
+KillSignal=SIGTERM
+TimeoutStopSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=maze-udp
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target

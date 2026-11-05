@@ -27,6 +27,7 @@ import time
 from common import game
 from common.protocol import HEARTBEAT_TIMEOUT, ProtocolError, TcpStreamBuffer, encode_tcp
 from common.server_core import GameServer
+from netutil.addresses import startup_banner
 
 log = logging.getLogger("tcp.server")
 
@@ -233,6 +234,8 @@ def main():
     parser.add_argument("--game-seconds", type=float, default=game.GAME_TICKS / game.TICK_RATE,
                         help="game length (default 120)")
     parser.add_argument("--heartbeat-timeout", type=float, default=HEARTBEAT_TIMEOUT)
+    parser.add_argument("--public-ip", help="only printed in the startup banner: the address players "
+                        "on other networks use (e.g. the cloud VM's public IP); never bound")
     parser.add_argument("--log-level", default="INFO")
     args = parser.parse_args()
 
@@ -240,6 +243,8 @@ def main():
     server = Server(args.host, args.port, int(args.game_seconds * game.TICK_RATE),
                     args.heartbeat_timeout)
     server.start()
+    for line in startup_banner("tcp", args.host, server.port, args.public_ip):
+        log.info("%s", line)
     # `kill <pid>` (SIGTERM) shuts down like Ctrl-C. Note: background jobs of a
     # non-interactive shell script start with SIGINT ignored, so scripts must use SIGTERM.
     signal.signal(signal.SIGTERM, _interrupt)

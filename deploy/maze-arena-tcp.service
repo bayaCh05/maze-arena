@@ -1,0 +1,25 @@
+# Maze Arena TCP server. Installed by deploy/setup_vm.sh, which fills in @USER@, @DIR@,
+# @PORT@ and @EXTRA_ARGS@. Logs: journalctl -u maze-arena-tcp -f
+[Unit]
+Description=Maze Arena TCP game server (port @PORT@/tcp)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=@USER@
+WorkingDirectory=@DIR@
+Environment=PYTHONUNBUFFERED=1
+ExecStart=@DIR@/.venv/bin/python -m tcp.server --host 0.0.0.0 --port @PORT@@EXTRA_ARGS@
+# Crash, kill -9 or reboot: back in 2 s. SIGTERM is a clean shutdown for the server.
+Restart=always
+RestartSec=2
+KillSignal=SIGTERM
+TimeoutStopSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=maze-tcp
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target

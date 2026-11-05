@@ -16,7 +16,6 @@ Logs: logs/chaos/<proto>_*.log
 """
 
 import os
-import signal
 import socket
 import subprocess
 import sys
@@ -70,9 +69,9 @@ class Proc:
         except subprocess.TimeoutExpired:
             return None
 
-    def stop(self, sig=signal.SIGINT):
+    def stop(self, kill=False):
         if self.alive():
-            self.popen.send_signal(sig)
+            self.popen.kill() if kill else self.popen.terminate()   # SIGKILL / SIGTERM (Windows: both TerminateProcess)
             if self.wait_exit(3) is None:
                 self.popen.kill()
                 self.popen.wait()
@@ -240,7 +239,7 @@ def run_chaos(proto):
 
         (send_garbage_tcp if proto == "tcp" else send_garbage_udp)(port)
         time.sleep(1.5)
-        bots["carol"].popen.send_signal(signal.SIGKILL)        # no goodbye
+        bots["carol"].popen.kill()                             # SIGKILL: no goodbye
         killed_at = time.monotonic()
         run_mallory(proto, port, check)
 
@@ -267,7 +266,7 @@ def run_chaos(proto):
         del killed_at
     finally:
         for b in bots.values():
-            b.stop(signal.SIGKILL)
+            b.stop(kill=True)
         server.stop()
     return results
 

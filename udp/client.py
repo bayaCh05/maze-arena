@@ -90,8 +90,8 @@ class UdpTransport(Transport):
                 data = self.sock.recv(65535)
             except socket.timeout:
                 continue
-            except ConnectionRefusedError:
-                continue            # ICMP port unreachable: server not (yet) running
+            except (ConnectionRefusedError, ConnectionResetError):
+                continue            # ICMP port unreachable (Windows: WinError 10054): server not (yet) running
             except OSError as exc:
                 self._shutdown(f"socket error: {exc}")
                 return
