@@ -189,11 +189,21 @@ Measures RTT, inter-update time between STATEs (mean/std/p99/max), missing ticks
 and retransmissions (UDP), and disconnection detection time. Output:
 `metrics/results.csv` and `metrics/charts/*.png` (raw samples in `metrics/raw/`, not committed).
 
+RTT of one network path against a running server (LAN vs Cloudflare Tunnel, for the slides):
+
+```bash
+python metrics/run_benchmark.py --rtt-host <server LAN IP> --port 5050 --label lan --protos tcp udp
+python metrics/run_benchmark.py --rtt-host 127.0.0.1 --port 15050 --label tunnel   # through cloudflared access tcp
+```
+
+Output: `metrics/rtt_paths.csv` and `metrics/charts/rtt_paths.png`.
+
 ## Documentation
 
 - [docs/demo_day_sheet.md](docs/demo_day_sheet.md): one page for demo day (roles, commands per laptop, order, plan B)
 - [docs/demo_checklist.md](docs/demo_checklist.md): the 4-computer demo, step by step, with the live script
-- [docs/cross_network.md](docs/cross_network.md): server on a cloud VM (`deploy/setup_vm.sh`) or over Tailscale
+- [docs/cloudflare_tunnel.md](docs/cloudflare_tunnel.md): **cross-network bonus**: server on the Mac, players on other networks through a Cloudflare Tunnel (TCP); Zero Trust + WARP for UDP
+- [docs/cross_network.md](docs/cross_network.md): alternatives: server on a cloud VM (`deploy/setup_vm.sh`) or over Tailscale
 - `CLAUDE.md`: project rules (message contract, authoritative server, ...)
 
 ## Layout
@@ -205,8 +215,8 @@ and retransmissions (UDP), and disconnection detection time. Output:
 | `udp/` | UDP server (one socket), `UdpTransport`, `reliability.py` (seq/ack/retransmit) |
 | `client_ui/` | pygame UI, renderer, headless bot, transport factory |
 | `netutil/` | server startup banner: this machine's IPv4 addresses and the client command |
-| `scripts/` | `netcheck.py`: TCP/UDP reachability check with diagnosis |
+| `scripts/` | `netcheck.py`: TCP/UDP reachability check with diagnosis; `tunnel_server.sh`, `tunnel_client.sh`/`.bat`: Cloudflare Tunnel |
 | `deploy/` | cloud VM: `setup_vm.sh`, systemd units for the TCP and UDP servers |
 | `metrics/` | benchmark, charts, results, macOS loss helper |
 | `tests/` | pytest suite + chaos test |
-| `docs/` | demo checklist, cross-network setup |
+| `docs/` | demo checklist, demo day sheet, Cloudflare Tunnel, cross-network alternatives |

@@ -4,9 +4,13 @@ Goal: the server runs somewhere reachable from the internet, and the 3 clients
 join from **different networks** (home Wi-Fi, phone hotspot, campus) with
 `--host <public IP>`.
 
-Two ways:
+> **Our bonus plan is now the Cloudflare Tunnel: [cloudflare_tunnel.md](cloudflare_tunnel.md)**
+> (server on the Mac, no VM, no port forwarding; TCP version across networks). This page
+> keeps the alternatives.
 
-- **A. Cloud VM (Oracle Cloud Free Tier, Ubuntu)**: a real internet path. Recommended for the demo.
+Other ways:
+
+- **A. Cloud VM (Oracle Cloud Free Tier, Ubuntu)**: a real internet path with a public IP, TCP and UDP.
 - **B. Tailscale**: zero firewall work, but it's a VPN overlay (see the note you must say in the demo).
 
 Facts that make this simple:

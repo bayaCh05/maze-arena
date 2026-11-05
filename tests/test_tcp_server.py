@@ -212,3 +212,32 @@ def test_server_survives_client_flood_without_newline(server):
         pass
     time.sleep(0.3)
     RawClient(server.port).login("still-alive").close()
+
+
+def test_three_clients_from_the_same_ip(server):
+    """Through a Cloudflare Tunnel every client arrives from 127.0.0.1 (cloudflared on the
+    server host), only the source port differs: players must be told apart per connection."""
+    a, b, c = (RawClient(server.port) for _ in range(3))
+    addrs = [x.sock.getsockname() for x in (a, b, c)]
+    assert {ip for ip, _ in addrs} == {"127.0.0.1"}
+    assert len({port for _, port in addrs}) == 3
+    for x, name in zip((a, b, c), ("alice", "bob", "carol")):
+        x.login(name)
+    dup = RawClient(server.port)                     # same IP again: refused by NAME, not IP
+    dup.send(make_msg(LOGIN, name="bob"))
+    assert dup.wait_for(LOGIN_FAIL)["reason"] == "name already taken"
+    dup.close()
+
+    start = join_and_ready([a, b, c])
+    assert start["players"] == ["alice", "bob", "carol"]
+    assert set(a.wait_for(STATE)["positions"]) == {"alice", "bob", "carol"}
+
+    b.close()                                        # only bob leaves; same IP as the others
+    assert a.wait_for(PLAYER_LEFT)["name"] == "bob"
+    assert c.wait_for(PLAYER_LEFT)["name"] == "bob"
+    a.received.clear(), c.received.clear()
+    assert set(a.wait_for(STATE)["positions"]) == {"alice", "carol"}
+    assert set(c.wait_for(STATE)["positions"]) == {"alice", "carol"}
+    again = RawClient(server.port).login("bob")      # name free again, from the same IP
+    for x in (a, c, again):
+        x.close()

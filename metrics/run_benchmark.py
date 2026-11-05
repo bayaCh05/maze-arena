@@ -21,6 +21,13 @@ Measured (network-metrics skill), pooled over alice and bob:
   retransmissions  UDP reliable-message retransmissions (clients, server)
   detect         SIGKILL of carol -> server logs PLAYER_LEFT carol
 Raw samples: metrics/raw/<proto>_<method>_loss<NN>_<node>.csv (git-ignored).
+
+RTT of one network path (LAN vs Cloudflare Tunnel vs ...), against a server that is
+already running; PING {t} before login, so no player name is used:
+    python metrics/run_benchmark.py --rtt-host 192.168.1.20 --port 5050 --label lan
+    python metrics/run_benchmark.py --rtt-host 127.0.0.1 --port 15050 --label tunnel
+Rows go to metrics/rtt_paths.csv (one per label+proto, re-runs replace) and the
+chart metrics/charts/rtt_paths.png.
 """
 
 import argparse
@@ -40,6 +47,7 @@ PY = sys.executable
 METRICS = ROOT / "metrics"
 RAW = METRICS / "raw"
 RESULTS = METRICS / "results.csv"
+RTT_PATHS = METRICS / "rtt_paths.csv"
 NETLOSS = METRICS / "netloss_mac.sh"
 OS_PORT = 5061
 
@@ -214,6 +222,100 @@ def run_one(proto, loss, method, game_seconds, kill_after, port):
     return row
 
 
+# ---------------------------------------------------------------- RTT of one path
+
+RTT_FIELDS = ["label", "proto", "host", "port", "sent", "samples", "lost_pct",
+              "rtt_mean_ms", "rtt_p50_ms", "rtt_p95_ms", "rtt_min_ms", "rtt_max_ms", "measured_at"]
+
+
+def measure_rtt(proto, host, port, count, interval, timeout=2.0):
+    """PING {t} -> PONG against a running server; returns the RTTs in ms (lost pings left out)."""
+    sys.path.insert(0, str(ROOT))
+    from common.protocol import (PING, PONG, ProtocolError, TcpStreamBuffer, decode_udp, encode_tcp,
+                                 encode_udp, make_msg)
+
+    if proto == "tcp":
+        sock = socket.create_connection((host, port), timeout=timeout)
+        sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+        buf = TcpStreamBuffer()
+    else:
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        sock.connect((host, port))
+    rtts = []
+    try:
+        for i in range(count):
+            t = time.perf_counter()
+            msg = make_msg(PING, t=t)
+            sock.sendall(encode_tcp(msg)) if proto == "tcp" else sock.send(encode_udp(msg))
+            deadline = t + timeout
+            got = False
+            while not got and time.perf_counter() < deadline:
+                sock.settimeout(max(0.01, deadline - time.perf_counter()))
+                try:
+                    data = sock.recv(65535)
+                except (socket.timeout, TimeoutError):
+                    break
+                except (ConnectionRefusedError, ConnectionResetError):
+                    if proto == "tcp":
+                        raise
+                    break                                  # UDP: ICMP unreachable, count as lost
+                if proto == "tcp":
+                    if not data:
+                        raise ConnectionError("server closed the connection")
+                    msgs = buf.feed(data)
+                else:
+                    try:
+                        msgs = [decode_udp(data)[0]]
+                    except ProtocolError:
+                        msgs = []
+                for m in msgs:
+                    if m.get("type") == PONG and m.get("t") == t:
+                        rtts.append((time.perf_counter() - t) * 1000)
+                        got = True
+            print(f"\r   {i + 1}/{count} pings, {len(rtts)} PONGs", end="", flush=True)
+            time.sleep(max(0.0, interval - (time.perf_counter() - t)))
+    finally:
+        sock.close()
+        print()
+    return rtts
+
+
+def save_rtt_path(row):
+    old = []
+    if RTT_PATHS.exists():
+        with open(RTT_PATHS) as f:
+            old = list(csv.DictReader(f))
+    rows = [r for r in old if (r["label"], r["proto"]) != (row["label"], row["proto"])] + [row]
+    with open(RTT_PATHS, "w", newline="") as f:
+        w = csv.DictWriter(f, fieldnames=RTT_FIELDS, extrasaction="ignore")
+        w.writeheader()
+        w.writerows(rows)
+    print(f"wrote {RTT_PATHS.relative_to(ROOT)} ({len(rows)} rows)")
+
+
+def run_rtt_path(args):
+    for proto in args.protos:
+        print(f"== RTT {args.label} ({proto}) -> {args.rtt_host}:{args.port}, {args.count} pings every {args.interval} s")
+        try:
+            rtt = measure_rtt(proto, args.rtt_host, args.port, args.count, args.interval)
+        except OSError as exc:
+            sys.exit(f"cannot reach {args.rtt_host}:{args.port} over {proto}: {exc}\n"
+                     "Is the server (and, for a tunnel, `cloudflared access tcp`) running?")
+        if not rtt:
+            sys.exit(f"no PONG at all over {proto}: wrong port, or this path does not carry {proto.upper()}.")
+        row = {
+            "label": args.label, "proto": proto, "host": args.rtt_host, "port": args.port,
+            "sent": args.count, "samples": len(rtt),
+            "lost_pct": round(100 * (args.count - len(rtt)) / args.count, 1),
+            "rtt_mean_ms": round(statistics.mean(rtt), 3), "rtt_p50_ms": round(pct(rtt, 50), 3),
+            "rtt_p95_ms": round(pct(rtt, 95), 3), "rtt_min_ms": round(min(rtt), 3),
+            "rtt_max_ms": round(max(rtt), 3), "measured_at": datetime.now().isoformat(timespec="seconds"),
+        }
+        print(f"   mean {row['rtt_mean_ms']} ms, p50 {row['rtt_p50_ms']}, p95 {row['rtt_p95_ms']},"
+              f" min {row['rtt_min_ms']}, max {row['rtt_max_ms']}, lost {row['lost_pct']} %")
+        save_rtt_path(row)
+
+
 # ---------------------------------------------------------------- results file
 
 def save(rows):
@@ -242,7 +344,22 @@ def main():
     parser.add_argument("--game-seconds", type=float, default=120)
     parser.add_argument("--kill-after", type=float, default=20)
     parser.add_argument("--no-charts", action="store_true")
+    path = parser.add_argument_group("RTT of one path (server already running; --protos defaults to tcp)")
+    path.add_argument("--rtt-host", help="server address as this machine reaches it (127.0.0.1 for a tunnel)")
+    path.add_argument("--port", type=int, default=5050, help="server port, or the local cloudflared port")
+    path.add_argument("--label", default="path", help="name of the path in the CSV/chart, e.g. lan, tunnel")
+    path.add_argument("--count", type=int, default=100)
+    path.add_argument("--interval", type=float, default=0.2, help="seconds between pings")
     args = parser.parse_args()
+
+    if args.rtt_host:
+        if "--protos" not in sys.argv:
+            args.protos = ["tcp"]                       # a Cloudflare tunnel carries TCP only
+        run_rtt_path(args)
+        if not args.no_charts:
+            from make_charts import chart_rtt_paths
+            chart_rtt_paths()
+        return
 
     RAW.mkdir(parents=True, exist_ok=True)
     if args.loss_method == "os" and platform.system() != "Darwin":

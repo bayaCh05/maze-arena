@@ -220,7 +220,35 @@ def chart_detection(losses, by, suffix):
            "one client killed with SIGKILL (no goodbye) mid-game · dashed line = UDP heartbeat timeout (4 s)", f"detection{suffix}.png")
 
 
+def chart_rtt_paths():
+    """metrics/rtt_paths.csv (run_benchmark.py --rtt-host): one bar per measured path."""
+    path = METRICS / "rtt_paths.csv"
+    if not path.exists():
+        return
+    with open(path) as f:
+        rows = list(csv.DictReader(f))
+    if not rows:
+        return
+    fig, ax = plt.subplots(figsize=(max(5.0, 1.6 * len(rows) + 2), 4.2))
+    top = max(num(r["rtt_p95_ms"]) for r in rows)
+    for x, r in enumerate(rows):
+        mean, p95 = num(r["rtt_mean_ms"]), num(r["rtt_p95_ms"])
+        color = COLOR.get(r["proto"], INK2)
+        ax.bar(x, mean, 0.55, color=color, edgecolor=SURFACE, linewidth=2)
+        ax.plot([x, x], [mean, p95], color=INK2, linewidth=1)
+        ax.plot([x - 0.1, x + 0.1], [p95, p95], color=INK2, linewidth=1.5)
+        ax.annotate(f"{mean:.1f} ms\np95 {p95:.1f}", (x, p95), xytext=(0, 3), textcoords="offset points",
+                    ha="center", va="bottom", fontsize=8, color=INK)
+    ax.set_xticks(range(len(rows)), [f"{r['label']}\n{LABEL.get(r['proto'], r['proto'])}" for r in rows])
+    ax.tick_params(axis="x", length=0)
+    ax.set_ylabel("round-trip time (ms)")
+    ax.set_ylim(0, top * 1.35)
+    finish(fig, ax, "Round-trip time by network path",
+           "bar = mean, tick = p95 · PING→PONG to the same server over each path", "rtt_paths.png")
+
+
 def main():
+    chart_rtt_paths()
     with open(METRICS / "results.csv") as f:
         methods = sorted({r["loss_method"] for r in csv.DictReader(f)})
     for method in methods:

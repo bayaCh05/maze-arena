@@ -52,6 +52,7 @@ udp/         server.py, client.py, reliability.py  # UDP transport only + seq/ac
 client_ui/   ui.py, render.py, bot.py, connect.py  # pygame UI, headless bot; connect.py picks the transport
 netutil/     addresses.py                     # server startup banner (local IPs, client command); uses socket, so not in common/
 scripts/     netcheck.py                      # standalone TCP/UDP reachability check (stdlib only)
+             tunnel_server.sh, tunnel_client.{sh,bat}   # Cloudflare Tunnel helpers (docs/cloudflare_tunnel.md)
 deploy/      setup_vm.sh, maze-arena-{tcp,udp}.service   # cloud VM setup + systemd units
 metrics/     CSV output of measurements
 tests/       pytest
