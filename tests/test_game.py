@@ -168,7 +168,7 @@ def test_powered_player_eats_opponent_on_same_cell():
     g.tick(game)
     assert a["score"] == 70
     assert pos(game, "a") == (1, 1)        # respawned
-    assert a["dir"] == "NONE"
+    assert a["dir"] == "RIGHT"             # keeps going: same on TCP and UDP
     assert pos(game, "b") == (3, 1)
     assert game["players"]["b"]["score"] == 0
 
@@ -258,6 +258,14 @@ def test_ranking_and_winner():
         {"name": "c", "score": 30},
     ]
     assert g.get_winner(game) == "b"
+
+
+def test_tie_for_first_place_has_no_winner():
+    game = g.new_game(["a", "b", "c"])
+    for name, score in [("a", 50), ("b", 50), ("c", 10)]:
+        game["players"][name]["score"] = score
+    assert g.get_winner(game) is None
+    assert [r["name"] for r in g.get_ranking(game)] == ["a", "b", "c"]
 
 
 # ---------------------------------------------------------------- removal

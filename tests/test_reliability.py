@@ -8,7 +8,7 @@ import time
 from common.protocol import (
     ACK, INPUT, JOIN_ROOM, LOGIN, READY, STATE, decode_udp, encode_udp, make_msg,
 )
-from udp.reliability import ReliableEndpoint
+from udp.reliability import GAP_TIMEOUT, MAX_RETRIES, ReliableEndpoint
 
 A, B = ("10.0.0.1", 1111), ("10.0.0.2", 2222)
 
@@ -104,16 +104,16 @@ def test_retransmitted_join_when_ack_lost_joins_once():
     assert link.a.pending_count() == 0
 
 
-def test_gives_up_after_5_retries():
+def test_gives_up_after_max_retries():
     gave = []
     link = Link()
     link.a.on_give_up = lambda *args: gave.append(args)
     link.a.send(B, make_msg(READY))
-    for _ in range(20):
+    for _ in range(MAX_RETRIES + 5):
         link.wire.clear()                             # everything lost
         link.clock.now += 0.25
         link.a.tick()
-    assert link.a.stats.retransmissions == 5
+    assert link.a.stats.retransmissions == MAX_RETRIES
     assert link.a.stats.gave_up == 1
     assert gave == [(B, READY, 1)]
 
@@ -136,7 +136,7 @@ def test_gap_is_skipped_if_never_filled():
     link.a.send(B, make_msg(READY))
     link.flush()
     assert link.got[B] == []                          # held, waiting for seq 1
-    link.run(2.5)
+    link.run(GAP_TIMEOUT + 0.5)
     assert link.got[B] == [{"type": "READY"}]
     assert link.b.stats.gaps_skipped == 1
 
@@ -149,9 +149,8 @@ def test_everything_arrives_exactly_once_in_order_under_30_percent_loss():
     link.run(5)
     assert [m["i"] for m in link.got[B]] == list(range(200))
     assert link.a.stats.retransmissions > 50
-    # Round trip succeeds 0.7*0.7 = 49%: P(6 tries all fail) = 0.51**6 = 1.8%.
-    # Those "give ups" are ACK losses: the receiver already had the message.
-    assert link.a.stats.gave_up <= 10
+    # Round trip succeeds 0.7*0.7 = 49%: P(16 tries all fail) = 0.51**16 = 0.002%.
+    assert link.a.stats.gave_up == 0
 
 
 def test_peer_restart_is_detected_and_numbering_starts_over():
@@ -159,7 +158,7 @@ def test_peer_restart_is_detected_and_numbering_starts_over():
     for _ in range(3):
         link.a.send(B, make_msg(READY))
     link.flush()
-    link.run(3)
+    link.run(GAP_TIMEOUT + 1)
     link.a.forget(B)                                  # A forgets B (e.g. timed it out)
     link.a.send(B, make_msg(JOIN_ROOM, room="again"))  # A's seq starts at 1 again
     link.flush()
@@ -184,7 +183,7 @@ def test_early_seq1_retransmission_is_still_a_duplicate():
 def test_forged_huge_seq_cannot_poison_the_channel():
     link = Link()
     link.b.receive(encode_udp(make_msg(READY), seq=999_999_999, rel=True), A)
-    link.run(3)                                       # a gap skip must not jump to it
+    link.run(GAP_TIMEOUT + 1)                         # a gap skip must not jump to it
     link.a.send(B, make_msg(LOGIN, name="real"))
     link.flush()
     assert link.got[B] == [{"type": "LOGIN", "name": "real"}]

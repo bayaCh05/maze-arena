@@ -49,8 +49,9 @@ class GameRunner(threading.Thread):
                 with self.server.lock:
                     if self.stopped:
                         return
-                    game.tick(self.game)
-                    self.server.broadcast_game(self, make_msg(STATE, **game.get_state(self.game)))
+                    if not game.is_over(self.game):     # a leave can end it between ticks
+                        game.tick(self.game)
+                        self.server.broadcast_game(self, make_msg(STATE, **game.get_state(self.game)))
                     if game.is_over(self.game):
                         self.server.finish_game(self)
                         return
@@ -240,6 +241,8 @@ class GameServer:
             member.send(left)
         if room in self.lobby["rooms"]:
             self._send_room_update(room)
+            if rooms.can_start(self.lobby, room):   # the only unready player left
+                self._start_game(room)
         elif runner is not None:                    # room is empty: nobody to play for
             runner.stopped = True
             del self.games[room]

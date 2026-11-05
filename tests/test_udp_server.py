@@ -122,3 +122,14 @@ def test_lobby_and_game_work_with_20_percent_loss_both_ways():
             c.t.close()
     finally:
         srv.stop()
+
+
+def test_late_state_is_counted_late_not_lost():
+    from common.protocol import STATE
+    from udp.client import UdpTransport
+    t = UdpTransport("127.0.0.1", 9)                 # no socket needed for _accept
+    for tick in [1, 2, 5, 3, 4, 6, 9, 8]:
+        t._accept(make_msg(STATE, tick=tick))
+    assert t.states_received == 5                    # 1, 2, 5, 6, 9 shown
+    assert t.states_late == 3                        # 3, 4, 8 came after a newer one
+    assert t.states_lost == 1                        # only 7 never arrived

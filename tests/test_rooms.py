@@ -17,6 +17,9 @@ def test_create_and_list(lobby):
         r.create_room(lobby, "arena1")
     with pytest.raises(r.RoomError):
         r.create_room(lobby, "")
+    for bad in ["  ", " x", "a\nb"]:
+        with pytest.raises(r.RoomError):
+            r.create_room(lobby, bad)
 
 
 def test_join_and_update(lobby):

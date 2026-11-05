@@ -3,7 +3,8 @@
 Same Transport interface as TCP; differences stay in here:
   - reliability layer (udp/reliability.py) for lobby messages
   - STATE: older-than-last ticks are discarded; gaps are counted
-    (states_lost = skipped ticks, states_late = arrived after a newer one)
+    (states_lost = ticks never received, states_late = arrived after a newer one;
+    a late tick is no longer counted as lost)
   - the last INPUT is re-sent every tick during a game, so a lost INPUT
     heals itself 100 ms later (and keeps the server's heartbeat fresh)
   - PING every second = heartbeat + RTT
@@ -43,6 +44,7 @@ class UdpTransport(Transport):
         self.states_received = 0
         self.states_lost = 0
         self.states_late = 0
+        self._missing = set()               # skipped ticks that may still arrive late
 
     def connect(self):
         """UDP has no handshake: this only creates the socket. LOGIN proves the server is there."""
@@ -107,13 +109,19 @@ class UdpTransport(Transport):
             tick = msg.get("tick", 0)
             if tick <= self.last_tick:
                 self.states_late += 1               # older than what we showed: discard
+                if tick in self._missing:           # ...but it did arrive: late, not lost
+                    self._missing.discard(tick)
+                    self.states_lost -= 1
                 return
             if self.last_tick and tick > self.last_tick + 1:
                 self.states_lost += tick - self.last_tick - 1
+                self._missing.update(range(max(self.last_tick + 1, tick - 50), tick))
+                self._missing = {t for t in self._missing if t > tick - 50}
             self.last_tick = tick
             self.states_received += 1
         elif t == GAME_START:
             self.last_tick, self.in_game, self._input = 0, True, None
+            self._missing.clear()
         elif t == GAME_OVER:
             self.in_game, self._input = False, None
         self._deliver(msg)

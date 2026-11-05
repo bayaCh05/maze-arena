@@ -57,6 +57,7 @@ class Bot:
         self.done = False
         self.last_tick = 0
         self.gaps = 0                       # missed ticks (should stay 0 on TCP)
+        self.join_retries = 0
         self.t.on_message(self.on_message)
         self.t.send(make_msg(LOGIN, name=name))
 
@@ -77,6 +78,11 @@ class Bot:
             self.log.error("login refused: %s", msg.get("reason"))
             self.t.close()
         elif t == ROOM_LIST and msg.get("error") and msg["error"] != "room already exists":
+            self.join_retries += 1
+            if msg["error"] in ("game already running", "room is full") or self.join_retries > 10:
+                self.log.error("cannot join %s: %s (giving up)", self.room, msg["error"])
+                self.t.close()
+                return
             self.log.warning("lobby error: %s (retrying)", msg["error"])
             time.sleep(0.5)
             if not self.in_room:

@@ -30,8 +30,9 @@ import time
 from common.protocol import ACK, RELIABLE_TYPES, decode_udp, encode_udp, make_msg
 
 RTO = 0.2              # retransmission timeout (s)
-MAX_RETRIES = 5        # retransmissions after the first send
-GAP_TIMEOUT = 2.0      # > RTO * (MAX_RETRIES + 1): the sender has surely given up
+MAX_RETRIES = 15       # retransmissions after the first send: at 30 % loss both ways a
+                       # round trip fails 51 % of the time, 0.51**16 = 0.002 % give-ups
+GAP_TIMEOUT = 4.0      # > RTO * (MAX_RETRIES + 1): the sender has surely given up
 MAX_HELD = 256         # out-of-order reliable messages kept per peer
 
 

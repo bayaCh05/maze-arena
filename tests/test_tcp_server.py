@@ -156,11 +156,29 @@ def test_disconnect_mid_game_others_continue(server):
 def test_last_player_wins_when_other_leaves(server):
     a, b = RawClient(server.port).login("a"), RawClient(server.port).login("b")
     join_and_ready([a, b])
+    first = a.wait_for(STATE)
     b.close()
     a.wait_for(PLAYER_LEFT)
     over = a.wait_for(GAME_OVER)
     assert over["winner"] == "a"
+    ticks = [first["tick"]] + [m["tick"] for m in a.received if m["type"] == STATE]
+    assert ticks == sorted(set(ticks))               # no repeated tick before GAME_OVER
     a.close()
+
+
+def test_game_starts_when_the_only_unready_player_leaves(server):
+    a, b, c = (RawClient(server.port).login(n) for n in ("a", "b", "c"))
+    a.send(make_msg(CREATE_ROOM, room="r1"))
+    for x in (a, b, c):
+        x.send(make_msg(JOIN_ROOM, room="r1"))
+        x.wait_for(ROOM_UPDATE)
+    a.send(make_msg(READY, ready=True))
+    b.send(make_msg(READY, ready=True))
+    c.close()                                        # c never got ready
+    assert a.wait_for(GAME_START)["players"] == ["a", "b"]
+    b.wait_for(GAME_START)
+    a.close()
+    b.close()
 
 
 def test_heartbeat_timeout_closes_silent_client(fast_heartbeat_server):

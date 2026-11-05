@@ -116,7 +116,7 @@ class App:
             if key == pygame.K_UP:
                 self.selected = max(0, self.selected - 1)
             elif key == pygame.K_DOWN:
-                self.selected = min(len(self.rooms) - 1, self.selected + 1)
+                self.selected = max(0, min(len(self.rooms) - 1, self.selected + 1))
             elif key == pygame.K_RETURN and self.rooms:
                 self.t.send(make_msg(JOIN_ROOM, room=self.rooms[self.selected]["room"]))
             elif key == pygame.K_c:
@@ -130,7 +130,7 @@ class App:
             elif key == pygame.K_ESCAPE:
                 self.leave_room()
         elif self.screen_name == "game":
-            if key in KEYS and KEYS[key] != self.my_dir:
+            if key in KEYS:                    # always send: the same key must work again after a respawn
                 self.my_dir = KEYS[key]
                 self.t.send(make_msg(INPUT, dir=self.my_dir))
             elif key == pygame.K_ESCAPE:
@@ -192,7 +192,8 @@ class App:
                               (120, 255, 120) if p["ready"] else render.TEXT))
             return lines + ["", ("R = toggle ready (starts when all ready, 2+ players)   Esc = leave", render.DIM)]
         if self.screen_name == "over" and self.result:
-            lines = ["GAME OVER", f"Winner: {self.result['winner']}", ""]
+            winner = self.result["winner"]
+            lines = ["GAME OVER", f"Winner: {winner}" if winner else "Draw", ""]
             lines += [f"{i + 1}. {r['name']}  {r['score']}" for i, r in enumerate(self.result["ranking"])]
             return lines + ["", ("Enter = back to room   Esc = leave room", render.DIM)]
         return ["..."]

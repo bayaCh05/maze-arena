@@ -24,7 +24,7 @@ def test_decode_rejects_bad_input(data):
 
 def test_valid_name():
     assert p.valid_name("alice")
-    for bad in ["", " ", " bob", "x" * 13, None, 5]:
+    for bad in ["", " ", " bob", "x" * 13, None, 5, "a\nb", "a\x00", "tab\t", "zero\u200bwidth"]:
         assert not p.valid_name(bad)
 
 

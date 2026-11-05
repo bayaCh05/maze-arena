@@ -157,7 +157,11 @@ class Server:
                     reason = "connection closed by peer (FIN)"
                     break
                 conn.last_seen = time.monotonic()
-                for msg in conn.buffer.feed(data):   # 0, 1 or many messages
+                errors = conn.buffer.errors
+                messages = conn.buffer.feed(data)   # 0, 1 or many messages
+                if conn.buffer.errors > errors:
+                    log.warning("%s sent %d malformed line(s), ignored", conn, conn.buffer.errors - errors)
+                for msg in messages:
                     try:
                         self.core.handle(conn, msg)
                     except Exception:

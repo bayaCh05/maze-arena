@@ -72,7 +72,8 @@ def make_msg(msg_type, **fields):
 
 
 def valid_name(name):
-    return isinstance(name, str) and 1 <= len(name.strip()) <= NAME_MAX and name == name.strip()
+    return (isinstance(name, str) and 1 <= len(name.strip()) <= NAME_MAX
+            and name == name.strip() and name.isprintable())
 
 
 def encode(msg):

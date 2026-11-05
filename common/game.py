@@ -103,8 +103,9 @@ def set_direction(game, name, direction):
 
 
 def _respawn(player):
+    # The direction is kept: the UDP client re-sends its last INPUT every 100 ms,
+    # so resetting it here would only stop TCP players (rules must not depend on the transport).
     player["x"], player["y"] = player["spawn"]
-    player["dir"] = "NONE"
     player["powered"] = 0
 
 
@@ -220,5 +221,8 @@ def get_ranking(game):
 
 
 def get_winner(game):
+    """Best player, or None if nobody is left or the top score is tied (a draw)."""
     ranking = get_ranking(game)
-    return ranking[0]["name"] if ranking else None
+    if not ranking or (len(ranking) > 1 and ranking[1]["score"] == ranking[0]["score"]):
+        return None
+    return ranking[0]["name"]

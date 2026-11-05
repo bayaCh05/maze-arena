@@ -19,7 +19,8 @@ def new_lobby():
 
 
 def create_room(lobby, room):
-    if not isinstance(room, str) or not 1 <= len(room) <= ROOM_NAME_MAX:
+    if (not isinstance(room, str) or not 1 <= len(room.strip()) <= ROOM_NAME_MAX
+            or room != room.strip() or not room.isprintable()):
         raise RoomError("invalid room name")
     if room in lobby["rooms"]:
         raise RoomError("room already exists")
