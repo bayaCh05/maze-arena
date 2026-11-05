@@ -26,14 +26,15 @@ UDP adds transport fields to the same object (see below): `seq`, `ack`,
 {"type": "LOGIN_OK", "name": "alice"}
 {"type": "LOGIN_FAIL", "reason": "name already taken"}
 ```
-Names: 1–12 chars, unique per server.
+Names: 1–12 printable chars, no leading/trailing spaces, unique per server
+(room names: the same rules, up to 16 chars).
 
 ### Lobby / rooms
 ```json
 {"type": "LIST_ROOMS"}
 {"type": "CREATE_ROOM", "room": "arena1"}
 {"type": "ROOM_LIST", "rooms": [
-  {"room": "arena1", "players": 2, "max_players": 4, "in_game": false}
+  {"room": "arena1", "players": 2, "max_players": 3, "in_game": false}
 ]}
 ```
 `CREATE_ROOM` is answered with a fresh `ROOM_LIST` (creator still has to
@@ -59,8 +60,9 @@ carrying an optional `error` field:
 `ROOM_UPDATE` goes to every member of the room after any join/leave/ready.
 `READY.ready` is optional (default `true`; `false` = un-ready).
 Game starts when ≥2 players are in the room and all are ready.
-After GAME_OVER the room returns to the lobby state (everyone un-ready) and
-a `ROOM_UPDATE` is sent.
+The check also runs when a player leaves (the only unready player leaving
+starts the game). After GAME_OVER the room returns to the lobby state
+(everyone un-ready) and a `ROOM_UPDATE` is sent.
 
 ### Game
 ```json
@@ -95,6 +97,9 @@ Clients render the newest tick only.
              {"name": "carol", "score": 21},
              {"name": "bob",   "score": 15}]}
 ```
+`ranking` lists the players still in the game, best first (ties: alphabetical).
+`winner` is `null` when the top score is tied (a draw) or nobody is left.
+A player who gets eaten respawns and keeps their direction.
 
 ### Liveness
 ```json
@@ -109,8 +114,8 @@ Clients render the newest tick only.
 - Clients send `PING` every 1 s (`PING_INTERVAL`); it doubles as the heartbeat.
   `HEARTBEAT` is also accepted and answered with `PONG` (no `t`).
 - `PLAYER_LEFT` is sent to the remaining room members when a client leaves,
-  disconnects, or times out (no message for `HEARTBEAT_TIMEOUT` = 5 s).
-  Clients likewise give up on a server silent for 5 s.
+  disconnects, or times out. Timeouts: TCP 5 s both ways
+  (`protocol.HEARTBEAT_TIMEOUT`); UDP server 4 s, UDP client 10 s (see below).
 
 ## Encoding / decoding
 
@@ -159,14 +164,14 @@ Delivery classes (UDP) — `protocol.RELIABLE_TYPES`:
 - **Reliable, ordered**: LOGIN, LOGIN_OK, LOGIN_FAIL, LIST_ROOMS, CREATE_ROOM,
   ROOM_LIST, JOIN_ROOM, LEAVE_ROOM, READY, ROOM_UPDATE, GAME_START, GAME_OVER,
   PLAYER_LEFT. (Replies are reliable too: a lost LOGIN_OK would strand the client.)
-  - Retransmit every 200 ms (RTO), at most 5 retransmissions, then give up
+  - Retransmit every 200 ms (RTO), at most 15 retransmissions, then give up
     (logged + counted; liveness is decided by the heartbeat, not by one message).
   - Receiver ACKs **every** copy; `seq < expected` = duplicate → dropped but
     re-ACKed (a retransmitted JOIN never joins twice).
   - `seq > expected` is held until the gap fills (in-order delivery: CREATE_ROOM
     is always processed before the JOIN_ROOM sent right after it). A gap not
-    filled within 2 s (sender gave up) is skipped.
-  - A fresh `seq: 1` arriving > 2 s after the first one = the peer forgot us and
+    filled within 4 s (sender gave up) is skipped.
+  - A fresh `seq: 1` arriving > 4 s after the first one = the peer forgot us and
     restarted; both directions restart at 1.
   - Ordering is per client only: two different clients' messages can still
     arrive in any order.
@@ -180,7 +185,8 @@ Liveness (UDP): clients PING every 1 s; the server drops a client silent for
 
 `--drop P` (UDP server, UI and bot) discards fraction P of **outgoing**
 datagrams to simulate loss. With P on both sides a reliable round trip succeeds
-with (1-P)², so the sender gives up with probability (1-(1-P)²)⁶ (0.2 % at P=0.2),
-almost always because ACKs were lost while the message itself arrived.
+with (1-P)², so the sender gives up with probability (1-(1-P)²)¹⁶
+(0.002 % at P=0.3; it was 1.8 % with the old 5 retries, enough to lose a
+GAME_START or GAME_OVER now and then in the 30 % demo).
 
 TCP needs none of the transport fields — never send `seq`/`ack`/`rel` over TCP.

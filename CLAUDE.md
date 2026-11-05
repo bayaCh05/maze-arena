@@ -8,7 +8,8 @@ Demo: **Friday 2026-11-13**, 1 server + 3 clients on 4 different computers.
 ## Non-negotiable rules
 
 1. **Game logic lives ONLY in `common/` and has NO networking imports.**
-   No `socket`, `select`, `selectors`, `asyncio`, `threading`-for-I/O, or
+   No `socket`, `select`, `selectors`, `asyncio`, `threading`-for-I/O (the game-loop
+   timer thread and lock in `server_core.py` are the only threading), or
    anything from `tcp/` / `udp/` inside `common/`. `common/` must be testable
    with plain pytest and no network.
 2. **The server is authoritative.** Clients send only `INPUT {dir}`. The server
@@ -20,12 +21,15 @@ Demo: **Friday 2026-11-13**, 1 server + 3 clients on 4 different computers.
 
    | Client → Server               | Server → Client                                   |
    |-------------------------------|---------------------------------------------------|
-   | `LOGIN {name}`                | `LOGIN_OK` / `LOGIN_FAIL`                         |
-   | `LIST_ROOMS`, `CREATE_ROOM`   | `ROOM_LIST`                                       |
-   | `JOIN_ROOM`, `LEAVE_ROOM`, `READY {ready}` | `ROOM_UPDATE {players}`             |
-   | `INPUT {dir}`                 | `GAME_START {maze, players, colors, tick_rate}`, `STATE {tick, positions, pellets, power_pellets, scores, powered}` |
-   |                               | `GAME_OVER {ranking, winner}`                     |
-   | `PING` / `HEARTBEAT`          | `PONG`, `PLAYER_LEFT {name}`                      |
+   | `LOGIN {name}`                | `LOGIN_OK {name}` / `LOGIN_FAIL {reason}`         |
+   | `LIST_ROOMS`, `CREATE_ROOM {room}` | `ROOM_LIST {rooms, error?}` (also the reply to a refused CREATE/JOIN/READY, and to `LEAVE_ROOM`) |
+   | `JOIN_ROOM {room}`, `LEAVE_ROOM`, `READY {ready}` | `ROOM_UPDATE {room, players}`, `PLAYER_LEFT {name}` |
+   | `INPUT {dir}`                 | `GAME_START {room, maze, players, colors, tick_rate, max_ticks}`, `STATE {tick, positions, pellets, power_pellets, scores, powered}` |
+   |                               | `GAME_OVER {ranking, winner}` (`winner` is `null` on a tie) |
+   | `PING {t}` (`HEARTBEAT` accepted, unused) | `PONG {t}`, `PLAYER_LEFT {name}`      |
+   | UDP only: `ACK {ack}` (both directions, transport layer) |                        |
+
+   `PLAYER_LEFT` goes to the rest of the room on a leave, a disconnect or a timeout.
 
 4. **Servers bind to `0.0.0.0`**; host and port are configurable by CLI args
    (`--host`, `--port`). Clients take `--host` / `--port` for the server address.
@@ -54,7 +58,7 @@ tests/       pytest
 
 - **TCP**: newline-delimited JSON (`json.dumps(msg) + "\n"`), buffer until `\n`.
 - **UDP**: one datagram = one message. Lobby/game-event messages are reliable
-  and ordered (`seq`/`rel`, `ACK {ack}`, 200 ms RTO, 5 retries); STATE, INPUT,
+  and ordered (`seq`/`rel`, `ACK {ack}`, 200 ms RTO, 15 retries); STATE, INPUT,
   PING/PONG are unreliable. All of it lives in `udp/reliability.py`.
 
 Servers differ only in transport: lobby, rooms and the game loop are in

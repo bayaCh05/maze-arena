@@ -13,6 +13,8 @@ Server choice:
 
 ## 1. The day before (every computer)
 
+- [ ] Every laptop can clone the **private** repo (collaborator access, `gh auth login`
+      or a token), or bring the repo on a USB stick / as a zip.
 - [ ] Repo up to date (`git pull`), venv created, `pip install -r requirements.txt` works.
 - [ ] `python local_demo.py` opens a window and you can move (pygame works on this machine).
 - [ ] `python -m pytest -q -k "not chaos"` passes (do it on S at least).
@@ -38,11 +40,13 @@ Write S's IP on the board/slide. Below it's `S_IP`.
 
 Clients only make outgoing connections; their replies are allowed back automatically.
 
-**macOS (S)**: the first time the server starts, macOS asks *"Do you want the application
+**macOS (S)**: check with `/usr/libexec/ApplicationFirewall/socketfilterfw --getglobalstate`.
+If it is off, nothing to do. If it is on, the first time the server starts, macOS asks *"Do you want the application
 Python to accept incoming network connections?"* → **Allow**. If someone clicked Deny:
 System Settings → Network → Firewall → Options → Python → "Allow incoming connections"
-(and make sure "Block all incoming connections" is off). The prompt can come back
-after a Python update: start the server once before the demo to get it out of the way.
+(and make sure "Block all incoming connections" is off). The rule is per Python binary:
+the venv's Python needs its own "Allow" even if another Python was allowed before.
+Start the server once before the demo to get the prompt out of the way.
 
 **Windows (S)**: allow Python on **Private** networks in the prompt, and make sure the
 Wi-Fi is set to *Private* (Settings → Network → Wi-Fi → network properties). Or as admin:
@@ -92,7 +96,7 @@ Say:
 
 | Who | Do |
 |---|---|
-| C | crash carol: macOS/Linux `pkill -9 -f client_ui.ui` · Windows `taskkill /F /IM python.exe` |
+| C | crash carol: macOS/Linux `pkill -9 -f client_ui.ui` · Windows `taskkill /F /IM python.exe` (kills every Python on C) |
 
 Say:
 - S's log: `PLAYER_LEFT carol … (connection closed by peer (FIN))`, detected **within milliseconds**:
@@ -139,6 +143,9 @@ Say:
 | macOS | `sudo sh metrics/netloss_mac.sh on 5050 0.3 0 en0` | `sudo sh metrics/netloss_mac.sh off` |
 | Linux (incl. cloud VM) | see the block below | `sudo tc qdisc del dev IFACE root` |
 
+On macOS the script drops 30 % in **both** directions (client→S and S→client);
+the Linux block below drops only what S sends. Say which one you used.
+
 Linux: drop 30 % of what S **sends from port 5050** (STATE, the bulk of the traffic); find
 `IFACE` with `ip -4 route get 1.1.1.1` (the word after `dev`):
 ```bash
@@ -162,13 +169,17 @@ Say:
 
 ### Act 5: numbers (1 min)
 
-Show `metrics/charts/` (from `python metrics/run_benchmark.py`):
+Show `metrics/charts/` (from `python metrics/run_benchmark.py`). These numbers were measured on
+**one machine (loopback)**: RTT there is ~1 ms; point at the RTT in a client window for the
+real Wi-Fi value.
 - `inter_update.png`: time between updates; UDP's spread grows with loss.
 - `udp_loss.png`: missing ticks ≈ loss rate; only a handful of reliable resends.
 - `detection.png`: TCP < 1 ms vs UDP ~4 s after a SIGKILL.
 - `rtt.png`: RTT is the same for both; loss doesn't show in RTT.
 
-If you rehearsed with `--loss-method os`, also show the `*_os.png` charts (TCP under kernel loss).
+The TCP 10 % / 30 % rows of `metrics/results.csv` are empty until you run
+`sudo -v && python metrics/run_benchmark.py --loss-method os` on a Mac; only then do the
+`*_os.png` charts (TCP under kernel loss) exist.
 
 ## 5. Plan B
 
@@ -179,7 +190,7 @@ If you rehearsed with `--loss-method os`, also show the `*_os.png` charts (TCP u
   and the same for carol. The whole script still works, apart from it being one machine.
 - **Port 5050 busy on S** → `lsof -nP -i :5050` (macOS/Linux) to find the old server,
   or use `--port 5051` everywhere. (On a Mac never use 5000: AirPlay.)
-- **"name already taken"** after a crash → wait 5 s (heartbeat) or pick another name.
+- **"name already taken"** after a crash → wait 5 s (TCP) / 4 s (UDP heartbeat) or pick another name.
 
 ## 6. After the demo
 

@@ -23,7 +23,7 @@ Goal: compare TCP vs UDP with numbers, under the same game and same tick rate.
 | `inter_update` | client | arrival time between consecutive accepted STATEs (ideal 100 ms; spread = jitter) | ms |
 | `disconnect_detect` | server | `detected_at - last_seen_at` for the client when PLAYER_LEFT is emitted; `extra` = `fin`, `rst`, `timeout` | ms |
 | `retransmit` | UDP sender (both sides) | one row per retransmission; `value` = attempt number, `extra` = `TYPE:seq` | count |
-| `retransmit_fail` | UDP sender | reliable msg given up after 5 tries; `extra` = `TYPE:seq` | count |
+| `retransmit_fail` | UDP sender | reliable msg given up after 16 tries; `extra` = `TYPE:seq` | count |
 
 Expected story for the report:
 - TCP: `tick_gap` always 0, but `inter_update` spikes under loss (head-of-line blocking).

@@ -23,11 +23,17 @@ the same game logic, **TCP-only** and **UDP-only**, to compare the two transport
 ## Install
 
 ```bash
-git clone <repo-url> maze-arena && cd maze-arena
-python3 -m venv .venv
+git clone https://github.com/bayaCh05/maze-arena.git && cd maze-arena
+python3 -m venv .venv              # Windows: py -m venv .venv
 source .venv/bin/activate          # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 ```
+
+The repository is **private**: every machine that clones it needs access. Either
+add the person as a collaborator on GitHub, or log in once with `gh auth login`
+(GitHub CLI) or use a personal access token as the password when `git clone` asks.
+Without access the clone fails with "Repository not found". A zip of the repo
+(GitHub → Code → Download ZIP) also works.
 
 Always run from the repo root with `python -m ...` (so `common` imports resolve).
 
@@ -57,7 +63,9 @@ The TCP and UDP servers can run **at the same time on the same port number**
 
 Login (or `--name`) → lobby: **C** create room, **↑/↓ + Enter** join, **L** refresh →
 room: **R** ready (starts when ≥ 2 players are all ready) → game: **arrows/WASD** →
-after GAME_OVER: **Enter** back to the room. **Esc** leaves / quits. RTT is shown in the corner.
+after GAME_OVER: **Enter** back to the room (a tied top score shows **Draw**).
+**Esc** leaves / quits. RTT is shown in the corner. If the server goes away the window
+shows **Disconnected** (TCP at once, UDP after 10 s of silence); **Esc** closes it.
 
 ### Other entry points
 
