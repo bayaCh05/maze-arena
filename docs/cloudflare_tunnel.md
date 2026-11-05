@@ -12,8 +12,9 @@ What a tunnel can and can't carry for us:
 | On each client | `cloudflared` running next to the game | the WARP app, enrolled in your Zero Trust org |
 | Client connects to | `127.0.0.1:<local port>` | the Mac's private IP, port 5050 |
 
-So the cross-network demo is the **TCP version through the tunnel**. The UDP version is
-demoed on the LAN, or through Option B if you set it up.
+So the cross-network demo is the **TCP version through the tunnel**. The **UDP version
+crosses networks through playit.gg** instead ([playit_udp.md](playit_udp.md): nothing to
+install on the clients). Option B is a further alternative for UDP.
 
 Contents: [1 What you need](#1-what-you-need) ·
 [2 Install cloudflared](#2-install-cloudflared) ·
@@ -165,24 +166,29 @@ shared with other customers of that carrier, but it still differs from the other
 same command on the Mac: a fourth IP. Then show the server log: the three players' `CONNECT
 127.0.0.1:<port>` / `LOGIN` lines arrive as they join.
 
-## 7. Measure RTT: LAN vs tunnel
+## 7. Measure: LAN vs tunnel
 
-`metrics/run_benchmark.py` can measure PING→PONG RTT against a server that is already
-running (PINGs before login, so no player name is used). From one client laptop:
+`metrics/run_benchmark.py --host` runs 3 bots on one client laptop against the server
+that is already running on the Mac, for one full game (its length is the server's
+`--game-seconds`; pass the same value here, it is the benchmark's timeout):
 
 ```bash
 # on the same LAN as the Mac, direct (TCP and UDP):
-python metrics/run_benchmark.py --rtt-host <Mac LAN IP> --port 5050 --label lan --protos tcp udp
+python metrics/run_benchmark.py --host <Mac LAN IP> --port 5050 --network lan --protos tcp udp
 # from another network, through the tunnel (cloudflared access tcp running on 15050):
-python metrics/run_benchmark.py --rtt-host 127.0.0.1 --port 15050 --label tunnel
+python metrics/run_benchmark.py --host 127.0.0.1 --port 15050 --network cloudflare --protos tcp
+# UDP through playit.gg (playit_udp.md):
+python metrics/run_benchmark.py --host xxx.at.ply.gg --port 41234 --network playit --protos udp
 ```
 
-Each run sends 100 PINGs (`--count`) every 0.2 s (`--interval`), writes one row per
-label and protocol to `metrics/rtt_paths.csv` (a re-run with the same label replaces it), and
-redraws `metrics/charts/rtt_paths.png`: one bar per path, mean with a p95 tick. Expect a
-few ms on the LAN and tens of ms through the tunnel, because every message goes to a
-Cloudflare data center and back twice (client → edge → Mac). On the slide, report the
-mean and p95 next to the path.
+Each run adds rows (RTT mean/p95, inter-update time, missing ticks) to `metrics/results.csv`
+with that `network` (a re-run replaces it; the local loss runs are `loopback`) and draws
+`metrics/charts/networks.png`, which compares all networks side by side. Expect about a ms on the
+LAN and tens of ms through a tunnel, because every message makes a detour through the tunnel
+provider's data center. On the slide, report the mean and p95 next to the path.
+
+Quick RTT only (100 PINGs before login, no game): add `--rtt-only` (→ `metrics/rtt_paths.csv`,
+`charts/rtt_paths.png`).
 
 ## 8. Troubleshooting
 
@@ -260,6 +266,18 @@ told apart by port. The UDP server keys sessions by (IP, port), so that works to
 
 ## 10. Bonus slide: how it works
 
+We use **two services**, one per version, because a Cloudflare public tunnel carries only HTTP(S)
+and TCP streams, not UDP datagrams:
+
+| | TCP version: Cloudflare Tunnel | UDP version: playit.gg |
+|---|---|---|
+| client runs | the game + `cloudflared access tcp` | the game only |
+| client connects to | `127.0.0.1:15050` (its own cloudflared) | `xxx.at.ply.gg:41234` directly |
+| on the Mac | `cloudflared tunnel run` → `tcp.server` 5050 | playit agent → `udp.server` 5050 |
+| server sees players as | `127.0.0.1:<port>` (cloudflared) | `127.0.0.1:<port>` (playit agent) |
+| keeps the path alive | TCP connections + PING/PONG every 1 s | PING every 1 s (+ INPUT every tick) refreshes the mapping |
+| ports opened / NAT config | none: both ends dial out | none: the agent dials out |
+
 **Path of one game message (TCP version):**
 
 ```
@@ -291,4 +309,26 @@ Replies take the same path back, over the same connections.
   no stream or connection to wrap, so that path doesn't carry it. UDP needs Cloudflare's
   private-network mode with the WARP client on every player (Option B): a VPN-like overlay.
 - **Cost of the detour.** Every message goes through a Cloudflare data center, which adds
-  latency; the chart `rtt_paths.png` (section 7) shows LAN vs tunnel RTT.
+  latency; the chart `networks.png` (section 7) shows LAN vs tunnel.
+
+**Path of one game message (UDP version, playit.gg):**
+
+```
+client game ──UDP──▶ playit edge (xxx.at.ply.gg:41234)
+            ──tunnel (opened OUTWARD by the playit agent on the Mac)──▶ playit agent (Mac)
+            ──UDP──▶ udp.server on 127.0.0.1:5050
+```
+
+- **Clients connect directly**: a plain UDP socket to a public address, the same client code
+  as on the LAN. `--host` accepts the hostname; it is resolved once at startup.
+- **Reverse tunnel**: the agent on the Mac connects *out* to playit and keeps the connection; playit's
+  edge receives the players' datagrams on the public port and pushes them down that tunnel. No
+  port forwarding, no public IP, works behind campus or carrier-grade NAT.
+- **The heartbeat keeps the flow alive**: UDP has no connection, so playit's per-player mapping and
+  every NAT on the way forget a flow that goes quiet. Our client sends a PING every second
+  (and INPUT every tick in a game), so the flow never idles; the server's 4 s heartbeat timeout
+  still removes players who vanish.
+- **Same IP, different ports**: the agent delivers every player from 127.0.0.1, one local port per player.
+  The UDP server keys sessions by the full (IP, port) (test `test_three_clients_from_the_same_ip`).
+- **Datagram size**: the tunnel adds headers, so datagrams should stay under ~1200 bytes
+  (`metrics/packet_sizes.py` measures every message; the server warns above that).

@@ -133,3 +133,60 @@ def test_late_state_is_counted_late_not_lost():
     assert t.states_received == 5                    # 1, 2, 5, 6, 9 shown
     assert t.states_late == 3                        # 3, 4, 8 came after a newer one
     assert t.states_lost == 1                        # only 7 never arrived
+
+
+def test_three_clients_from_the_same_ip():
+    """Through the playit.gg agent (or any NAT) all players may arrive from one IP: the server
+    must key sessions by the full (ip, port), and never dedupe or refuse by IP alone."""
+    srv = start_server(game_ticks=300, heartbeat_timeout=2.0)
+    try:
+        a, b, c = (Client(srv.port) for _ in range(3))
+        addrs = [x.t.sock.getsockname() for x in (a, b, c)]
+        assert {ip for ip, _ in addrs} == {"127.0.0.1"} and len(set(addrs)) == 3
+        for x, name in zip((a, b, c), ("alice", "bob", "carol")):
+            x.login(name)
+        assert {s.addr for s in srv.sessions.values()} == set(addrs)
+        assert {s.name for s in srv.sessions.values()} == {"alice", "bob", "carol"}
+        dup = Client(srv.port)                         # same IP, 4th port: refused by NAME only
+        dup.t.send(make_msg(LOGIN, name="bob"))
+        assert dup.wait_for(LOGIN_FAIL)["reason"] == "name already taken"
+        dup.t.close()
+
+        starts = play([a, b, c])
+        assert all(s["players"] == ["alice", "bob", "carol"] for s in starts)
+        c.t._closed.set()                              # carol goes silent; same IP as the others
+        c.t.sock.close()
+        assert a.wait_for(PLAYER_LEFT, timeout=4)["name"] == "carol"
+        assert b.wait_for(PLAYER_LEFT, timeout=4)["name"] == "carol"
+        a.got.clear()
+        assert set(a.wait_for(STATE)["positions"]) == {"alice", "bob"}
+        again = Client(srv.port).login("carol")        # from 127.0.0.1 again, new port
+        for x in (a, b, again):
+            x.t.close()
+    finally:
+        srv.stop()
+
+
+def test_host_name_is_resolved_once(server):
+    t = UdpTransport("localhost", server.port).connect()
+    try:
+        assert t.server_ip == "127.0.0.1"              # IPv4 even if localhost also has ::1
+        assert t.sock.getpeername() == ("127.0.0.1", server.port)
+    finally:
+        t.close()
+    with pytest.raises(socket.gaierror):
+        UdpTransport("no-such-host.invalid", server.port).connect()
+
+
+def test_big_datagram_is_warned_once_per_type(server, caplog):
+    from common.protocol import UDP_WARN_SIZE, encode_udp
+    sink = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    sink.bind(("127.0.0.1", 0))
+    big = encode_udp(make_msg(STATE, tick=1, pad="x" * UDP_WARN_SIZE))
+    with caplog.at_level("WARNING", logger="udp.server"):
+        for _ in range(3):
+            server._send_raw(big, sink.getsockname())
+        server._send_raw(encode_udp(make_msg(STATE, tick=2)), sink.getsockname())
+    warnings = [r.getMessage() for r in caplog.records if "datagram is" in r.getMessage()]
+    assert len(warnings) == 1 and warnings[0].startswith(f"STATE datagram is {len(big)} bytes")
+    sink.close()

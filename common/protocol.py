@@ -55,6 +55,7 @@ HEARTBEAT_TIMEOUT = 5.0       # seconds of silence before a peer is considered g
 TCP_MAX_BUFFER = 64 * 1024     # bytes without a newline before we give up on a client
 UDP_MAX_DATAGRAM = 65507       # hard limit of a UDP payload over IPv4
 UDP_SAFE_SIZE = 1400           # stay under this to avoid IP fragmentation
+UDP_WARN_SIZE = 1200           # tunnels (playit.gg, WARP) add their own headers: warn above this
 
 TRANSPORT_FIELDS = ("seq", "ack", "rel")
 

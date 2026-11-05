@@ -41,9 +41,17 @@ def num(v):
         return None
 
 
+NETWORK_ORDER = ["loopback", "lan", "cloudflare", "playit"]
+
+
+def network(row):
+    return row.get("network") or "loopback"     # rows written before the network column
+
+
 def load(method):
+    """Loss experiments: loopback rows only (other networks go to chart_networks)."""
     with open(METRICS / "results.csv") as f:
-        rows = [r for r in csv.DictReader(f) if r["loss_method"] == method]
+        rows = [r for r in csv.DictReader(f) if r["loss_method"] == method and network(r) == "loopback"]
     losses = sorted({int(r["loss_pct"]) for r in rows})
     by = {(r["proto"], int(r["loss_pct"])): r for r in rows}
     return losses, by
@@ -239,7 +247,7 @@ def chart_rtt_paths():
         ax.plot([x - 0.1, x + 0.1], [p95, p95], color=INK2, linewidth=1.5)
         ax.annotate(f"{mean:.1f} ms\np95 {p95:.1f}", (x, p95), xytext=(0, 3), textcoords="offset points",
                     ha="center", va="bottom", fontsize=8, color=INK)
-    ax.set_xticks(range(len(rows)), [f"{r['label']}\n{LABEL.get(r['proto'], r['proto'])}" for r in rows])
+    ax.set_xticks(range(len(rows)), [f"{r['network']}\n{LABEL.get(r['proto'], r['proto'])}" for r in rows])
     ax.tick_params(axis="x", length=0)
     ax.set_ylabel("round-trip time (ms)")
     ax.set_ylim(0, top * 1.35)
@@ -247,10 +255,64 @@ def chart_rtt_paths():
            "bar = mean, tick = p95 · PING→PONG to the same server over each path", "rtt_paths.png")
 
 
+def chart_networks():
+    """results.csv rows at 0 % loss, one group per network: RTT, inter-update p99, missing ticks."""
+    with open(METRICS / "results.csv") as f:
+        rows = [r for r in csv.DictReader(f) if measured(r) and int(r["loss_pct"]) == 0]
+    nets = sorted({network(r) for r in rows},
+                  key=lambda n: (NETWORK_ORDER.index(n) if n in NETWORK_ORDER else 9, n))
+    if len(nets) < 2:
+        return                                   # only loopback: nothing to compare yet
+    by = {}
+    for r in rows:                               # loopback has app and os rows: prefer app
+        k = (network(r), r["proto"])
+        if k not in by or r["loss_method"] == "app":
+            by[k] = r
+    panels = [("rtt_mean_ms", "rtt_p95_ms", "round-trip time (ms)", "RTT (mean, tick = p95)"),
+              ("inter_update_mean_ms", "inter_update_p99_ms", "time between STATEs (ms)",
+               "Inter-update time (mean, tick = p99)"),
+              ("states_missing_pct", None, "STATE ticks never received (%)", "Missing ticks")]
+    fig, axes = plt.subplots(1, 3, figsize=(12.5, 4.3))
+    for ax, (key, tick, ylabel, title) in zip(axes, panels):
+        top = 0
+        for i, net in enumerate(nets):
+            for j, proto in enumerate(("tcp", "udp")):
+                r = by.get((net, proto))
+                if r is None:
+                    continue
+                x = i + (j - 0.5) * WIDTH
+                v = num(r[key]) or 0
+                hi = num(r[tick]) if tick else None
+                ax.bar(x, v, WIDTH, color=COLOR[proto], edgecolor=SURFACE, linewidth=2)
+                if hi is not None:
+                    ax.plot([x, x], [v, hi], color=INK2, linewidth=1)
+                    ax.plot([x - WIDTH / 5, x + WIDTH / 5], [hi, hi], color=INK2, linewidth=1.5)
+                label = f"{v:.1f}" if key != "states_missing_pct" else f"{v:.1f} %"
+                ax.annotate(label, (x, hi if hi is not None else v), xytext=(0, 3), textcoords="offset points",
+                            ha="center", va="bottom", fontsize=8, color=INK)
+                top = max(top, hi or v)
+        ax.set_xticks(range(len(nets)), nets)
+        ax.tick_params(axis="x", length=0)
+        ax.set_ylabel(ylabel)
+        ax.set_ylim(0, max(top, 1) * 1.3)
+        ax.set_title(title, loc="left", fontsize=11, color=INK)
+    if "loopback" in nets:
+        axes[1].axhline(100, color=INK2, linewidth=1, linestyle=(0, (4, 3)))
+    legend(axes[0], ("tcp", "udp"))
+    fig.suptitle("Same game over different networks (no loss injected)", x=0.01, ha="left",
+                 fontsize=13, fontweight="bold")
+    fig.tight_layout()
+    OUT.mkdir(exist_ok=True)
+    fig.savefig(OUT / "networks.png", dpi=150)
+    plt.close(fig)
+    print("wrote", (OUT / "networks.png").relative_to(METRICS.parent))
+
+
 def main():
     chart_rtt_paths()
+    chart_networks()
     with open(METRICS / "results.csv") as f:
-        methods = sorted({r["loss_method"] for r in csv.DictReader(f)})
+        methods = sorted({r["loss_method"] for r in csv.DictReader(f) if network(r) == "loopback"})
     for method in methods:
         suffix = "" if method == "app" else f"_{method}"
         losses, by = load(method)

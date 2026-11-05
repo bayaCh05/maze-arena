@@ -164,18 +164,28 @@ def check_udp(host, port, timeout, count):
 
 def main():
     parser = argparse.ArgumentParser(description="Check the network path to a Maze Arena server")
-    parser.add_argument("--host", required=True, help="server address (the one the server printed)")
+    parser.add_argument("--host", required=True,
+                        help="server IP or hostname (e.g. the playit.gg address), resolved once")
     parser.add_argument("--port", type=int, default=5050)
     parser.add_argument("--proto", choices=["both", "tcp", "udp"], default="both")
     parser.add_argument("--timeout", type=float, default=3.0, help="seconds to wait for the TCP connect")
     parser.add_argument("--count", type=int, default=5, help="PINGs per protocol")
     args = parser.parse_args()
 
+    # Resolve ONCE (IPv4), like the game client: both checks then use the same address.
+    try:
+        ip = socket.getaddrinfo(args.host, args.port, socket.AF_INET)[0][4][0]
+    except socket.gaierror as exc:
+        print(f"FAIL  cannot resolve '{args.host}' ({exc}). Check the spelling, or use the IP address.")
+        sys.exit(1)
+    if ip != args.host:
+        print(f"{args.host} resolved to {ip}\n")
+
     results = {}
     if args.proto in ("both", "tcp"):
-        results["TCP"] = check_tcp(args.host, args.port, args.timeout, args.count)
+        results["TCP"] = check_tcp(ip, args.port, args.timeout, args.count)
     if args.proto in ("both", "udp"):
-        results["UDP"] = check_udp(args.host, args.port, args.timeout, args.count)
+        results["UDP"] = check_udp(ip, args.port, args.timeout, args.count)
     print()
     for proto, ok in results.items():
         print(f"{proto}: {'OK, ready to play' if ok else 'NOT reachable (see above)'}")

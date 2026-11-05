@@ -62,3 +62,20 @@ def test_banner_for_a_specific_bind_address():
 def test_local_addresses_never_include_loopback():
     for ip, _desc in local_ipv4_addresses():
         assert not ip.startswith("127.")
+
+
+def test_netcheck_resolves_a_hostname_once():
+    udp = UdpServer("127.0.0.1", 0)
+    port = udp.start()
+    threading.Thread(target=udp.serve_forever, daemon=True).start()
+    try:
+        code, out = netcheck("--host", "localhost", "--port", str(port), "--proto", "udp", "--count", "2")
+    finally:
+        udp.stop()
+    assert code == 0, out
+    assert "localhost resolved to 127.0.0.1" in out
+
+
+def test_netcheck_unknown_hostname():
+    code, out = netcheck("--host", "no-such-host.invalid", "--port", "5050")
+    assert code == 1 and "cannot resolve" in out

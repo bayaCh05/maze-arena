@@ -59,14 +59,21 @@ ts,proto,role,node,metric,value,extra
 python metrics/run_benchmark.py                     # tcp+udp x 0/10/30 %, 120 s games, ~9 min
 python metrics/run_benchmark.py --protos udp --loss 0.3 --game-seconds 30   # quick
 python metrics/make_charts.py                       # re-draw charts from results.csv
+# against a server already running elsewhere (no loss injected, no kill):
+python metrics/run_benchmark.py --host xxx.at.ply.gg --port 41234 --network playit --protos udp
+python metrics/run_benchmark.py --host H --port P --network lan --rtt-only   # PING only -> rtt_paths.csv
+python metrics/packet_sizes.py                      # bytes per message type -> packet_sizes.csv
 ```
 - Bots write the long-format CSV above with `--metrics-csv` (metrics `rtt`,
   `inter_update`, `tick_gap`, plus `total_*` counters at exit). Samples are
   taken on the transport's network thread at arrival (`Transport.rtt_log`,
   `Transport.state_arrivals`), not when the UI/bot polls.
 - Raw: `metrics/raw/<proto>_<method>_loss<NN>_<node>.csv|.log` (git-ignored).
-- Summary: `metrics/results.csv`, one row per (proto, loss_pct, loss_method);
-  re-runs replace matching rows. Committed together with `metrics/charts/*.png`.
+- Summary: `metrics/results.csv`, one row per (network, proto, loss_pct, loss_method);
+  re-runs replace matching rows. `network` = loopback (local runs; older rows without
+  the column count as loopback), lan, cloudflare, playit; remote rows have
+  loss_method `none` and no detect/server columns (the server log isn't local).
+  `charts/networks.png` compares networks at 0 % loss. Committed together with `metrics/charts/*.png`.
 - Detection = SIGKILL wall time → timestamp of the server's `PLAYER_LEFT` log
   line (same machine, so wall clocks are comparable). Under UDP loss it can be
   < 4 s: the heartbeat clock starts at the last datagram *received*, and

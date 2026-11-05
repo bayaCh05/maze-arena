@@ -11,6 +11,7 @@ Same Transport interface as TCP; differences stay in here:
 """
 
 import socket
+import sys
 import threading
 import time
 
@@ -19,6 +20,7 @@ from common.protocol import (
     ProtocolError, make_msg,
 )
 from common.transport import Transport
+from netutil.addresses import resolve_ipv4
 from udp.reliability import ReliableEndpoint
 
 SERVER_TIMEOUT = 10.0   # client side: lenient, PONGs need 2 lucky datagrams under loss
@@ -30,6 +32,7 @@ class UdpTransport(Transport):
     def __init__(self, host, port, drop=0.0, server_timeout=SERVER_TIMEOUT):
         super().__init__()
         self.host, self.port = host, port
+        self.server_ip = None               # host resolved once in connect()
         self.drop = drop
         self.server_timeout = server_timeout
         self.sock = None
@@ -47,9 +50,14 @@ class UdpTransport(Transport):
         self._missing = set()               # skipped ticks that may still arrive late
 
     def connect(self):
-        """UDP has no handshake: this only creates the socket. LOGIN proves the server is there."""
+        """UDP has no handshake: this only creates the socket. LOGIN proves the server is there.
+
+        Raises socket.gaierror if --host is a name that doesn't resolve."""
+        self.server_ip = resolve_ipv4(self.host, self.port, "udp")
+        if self.server_ip != self.host:
+            print(f"server {self.host} resolved to {self.server_ip} (UDP port {self.port})", file=sys.stderr)
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        self.sock.connect((self.host, self.port))   # fixes the peer; send() without address
+        self.sock.connect((self.server_ip, self.port))   # fixes the peer: every send() goes to this IP
         self.sock.settimeout(0.2)
         self.peer = self.sock.getpeername()
         self.endpoint = ReliableEndpoint(lambda data, _addr: self.sock.send(data),

@@ -7,6 +7,7 @@ the heartbeat the server expects.
 """
 
 import socket
+import sys
 import threading
 import time
 
@@ -15,20 +16,25 @@ from common.protocol import (
     encode_tcp, make_msg,
 )
 from common.transport import Transport
+from netutil.addresses import resolve_ipv4
 
 
 class TcpTransport(Transport):
     def __init__(self, host, port, connect_timeout=5.0):
         super().__init__()
         self.host, self.port = host, port
+        self.server_ip = None               # host resolved once in connect()
         self.connect_timeout = connect_timeout
         self.sock = None
         self._send_lock = threading.Lock()
         self._closed = threading.Event()
 
     def connect(self):
-        """Open the connection; raises OSError if the server is unreachable."""
-        self.sock = socket.create_connection((self.host, self.port), timeout=self.connect_timeout)
+        """Open the connection; raises OSError if the server is unreachable or the name doesn't resolve."""
+        self.server_ip = resolve_ipv4(self.host, self.port, "tcp")
+        if self.server_ip != self.host:
+            print(f"server {self.host} resolved to {self.server_ip} (TCP port {self.port})", file=sys.stderr)
+        self.sock = socket.create_connection((self.server_ip, self.port), timeout=self.connect_timeout)
         self.sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
         # The server talks at least once per second (PONG, STATE), so a longer
         # silence means it is gone even if the TCP connection looks open.

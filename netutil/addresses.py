@@ -98,6 +98,16 @@ def local_ipv4_addresses():
     return result
 
 
+def resolve_ipv4(host, port, proto="udp"):
+    """Hostname (e.g. a playit.gg address) or IPv4 literal -> one IPv4 address string.
+
+    Clients call this ONCE at startup and then only use the IP, so a DNS change or a
+    slow resolver can't affect a running game. Raises socket.gaierror if it doesn't resolve.
+    """
+    socktype = socket.SOCK_DGRAM if proto == "udp" else socket.SOCK_STREAM
+    return socket.getaddrinfo(host, port, socket.AF_INET, socktype)[0][4][0]
+
+
 def startup_banner(proto, host, port, public_ip=None):
     """Lines for the server log: where players connect, and the exact commands to copy."""
     if host in ("0.0.0.0", ""):

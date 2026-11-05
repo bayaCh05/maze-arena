@@ -22,7 +22,7 @@ import threading
 import time
 
 from common import game
-from common.protocol import ProtocolError
+from common.protocol import UDP_WARN_SIZE, ProtocolError, decode
 from common.server_core import GameServer
 from netutil.addresses import startup_banner
 from udp.reliability import ReliableEndpoint
@@ -62,6 +62,7 @@ class Server:
                                          on_retransmit=self._on_retransmit,
                                          on_give_up=self._on_give_up)
         self.sessions = {}          # (ip, port) -> Session, guarded by core.lock
+        self._big_warned = set()    # message types already reported as > UDP_WARN_SIZE
         self.sock = None
         self.running = False
 
@@ -107,7 +108,18 @@ class Server:
     # ------------------------------------------------------------ datagrams
 
     def _send_raw(self, data, addr):
+        if len(data) > UDP_WARN_SIZE:
+            self._warn_big(data)
         self.sock.sendto(data, addr)
+
+    def _warn_big(self, data):
+        """Once per message type: tunnels (playit.gg, WARP) add headers, and datagrams near the
+        path MTU (~1500 B incl. IP/UDP) get fragmented or dropped along the way."""
+        mtype = decode(data)["type"]
+        if mtype not in self._big_warned:
+            self._big_warned.add(mtype)
+            log.warning("%s datagram is %d bytes (> %d): may be fragmented or dropped through a tunnel",
+                        mtype, len(data), UDP_WARN_SIZE)
 
     def _on_datagram(self, data, addr):
         try:

@@ -126,7 +126,7 @@ python local_demo.py [--bot]                     # offline, no network: try the 
 | Flag | Where | Default | Meaning |
 |---|---|---|---|
 | `--host` | servers | `0.0.0.0` | address to bind (all interfaces) |
-| `--host` | UI, bot | `127.0.0.1` | server address to connect to |
+| `--host` | UI, bot | `127.0.0.1` | server IP or hostname (e.g. the playit.gg address), resolved once at startup |
 | `--port` | all | `5050` | TCP or UDP port |
 | `--proto tcp\|udp` | UI, bot | `tcp` | which version to connect to |
 | `--drop P` | `udp.server`, UI, bot | `0` | UDP only: drop fraction P of this process's **outgoing** datagrams |
@@ -189,20 +189,25 @@ Measures RTT, inter-update time between STATEs (mean/std/p99/max), missing ticks
 and retransmissions (UDP), and disconnection detection time. Output:
 `metrics/results.csv` and `metrics/charts/*.png` (raw samples in `metrics/raw/`, not committed).
 
-RTT of one network path against a running server (LAN vs Cloudflare Tunnel, for the slides):
+Through a real network, against a server already running elsewhere (3 bots here, one full
+game there; rows get a `network` column, local runs are `loopback`):
 
 ```bash
-python metrics/run_benchmark.py --rtt-host <server LAN IP> --port 5050 --label lan --protos tcp udp
-python metrics/run_benchmark.py --rtt-host 127.0.0.1 --port 15050 --label tunnel   # through cloudflared access tcp
+python metrics/run_benchmark.py --host <server LAN IP> --port 5050 --network lan --protos tcp udp
+python metrics/run_benchmark.py --host 127.0.0.1 --port 15050 --network cloudflare --protos tcp   # via cloudflared access tcp
+python metrics/run_benchmark.py --host xxx.at.ply.gg --port 41234 --network playit --protos udp
+python metrics/run_benchmark.py --host ... --network ... --rtt-only        # PING RTT only -> rtt_paths.csv
+python metrics/packet_sizes.py               # bytes of every message type in a 3-player game
 ```
 
-Output: `metrics/rtt_paths.csv` and `metrics/charts/rtt_paths.png`.
+Output: `metrics/results.csv` + `metrics/charts/networks.png` (and `rtt_paths.*` for `--rtt-only`).
 
 ## Documentation
 
 - [docs/demo_day_sheet.md](docs/demo_day_sheet.md): one page for demo day (roles, commands per laptop, order, plan B)
 - [docs/demo_checklist.md](docs/demo_checklist.md): the 4-computer demo, step by step, with the live script
-- [docs/cloudflare_tunnel.md](docs/cloudflare_tunnel.md): **cross-network bonus**: server on the Mac, players on other networks through a Cloudflare Tunnel (TCP); Zero Trust + WARP for UDP
+- [docs/cloudflare_tunnel.md](docs/cloudflare_tunnel.md): **cross-network bonus, TCP**: server on the Mac, players on other networks through a Cloudflare Tunnel; bonus-slide explanation of both paths
+- [docs/playit_udp.md](docs/playit_udp.md): **cross-network bonus, UDP**: playit.gg agent on the Mac, clients connect directly to the playit address
 - [docs/cross_network.md](docs/cross_network.md): alternatives: server on a cloud VM (`deploy/setup_vm.sh`) or over Tailscale
 - `CLAUDE.md`: project rules (message contract, authoritative server, ...)
 
@@ -215,8 +220,8 @@ Output: `metrics/rtt_paths.csv` and `metrics/charts/rtt_paths.png`.
 | `udp/` | UDP server (one socket), `UdpTransport`, `reliability.py` (seq/ack/retransmit) |
 | `client_ui/` | pygame UI, renderer, headless bot, transport factory |
 | `netutil/` | server startup banner: this machine's IPv4 addresses and the client command |
-| `scripts/` | `netcheck.py`: TCP/UDP reachability check with diagnosis; `tunnel_server.sh`, `tunnel_client.sh`/`.bat`: Cloudflare Tunnel |
+| `scripts/` | `netcheck.py`: TCP/UDP reachability check with diagnosis; `tunnel_server.sh`, `tunnel_client.sh`/`.bat`: Cloudflare Tunnel; `playit_server.sh`: UDP via playit.gg |
 | `deploy/` | cloud VM: `setup_vm.sh`, systemd units for the TCP and UDP servers |
 | `metrics/` | benchmark, charts, results, macOS loss helper |
 | `tests/` | pytest suite + chaos test |
-| `docs/` | demo checklist, demo day sheet, Cloudflare Tunnel, cross-network alternatives |
+| `docs/` | demo checklist, demo day sheet, Cloudflare Tunnel (TCP), playit.gg (UDP), cross-network alternatives |

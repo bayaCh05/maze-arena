@@ -22,17 +22,24 @@ Measured (network-metrics skill), pooled over alice and bob:
   detect         SIGKILL of carol -> server logs PLAYER_LEFT carol
 Raw samples: metrics/raw/<proto>_<method>_loss<NN>_<node>.csv (git-ignored).
 
-RTT of one network path (LAN vs Cloudflare Tunnel vs ...), against a server that is
-already running; PING {t} before login, so no player name is used:
-    python metrics/run_benchmark.py --rtt-host 192.168.1.20 --port 5050 --label lan
-    python metrics/run_benchmark.py --rtt-host 127.0.0.1 --port 15050 --label tunnel
-Rows go to metrics/rtt_paths.csv (one per label+proto, re-runs replace) and the
-chart metrics/charts/rtt_paths.png.
+Through a real network, against a server that is ALREADY running (on the Mac):
+    python metrics/run_benchmark.py --host 192.168.1.20 --port 5050 --network lan
+    python metrics/run_benchmark.py --host 127.0.0.1 --port 15050 --network cloudflare --protos tcp
+    python metrics/run_benchmark.py --host xxx.at.ply.gg --port 12345 --network playit --protos udp
+3 bots here play one full game there (its length is the server's --game-seconds): RTT,
+inter-update time and missing ticks, no loss injected, no kill (the server log is
+not here). Rows go to results.csv with that "network" (local runs are "loopback");
+chart metrics/charts/networks.png compares them.
+
+Only RTT (PING before login, no game, no player name used), add --rtt-only:
+    python metrics/run_benchmark.py --host 127.0.0.1 --port 15050 --network cloudflare --rtt-only
+-> metrics/rtt_paths.csv (one row per network+proto, re-runs replace) and charts/rtt_paths.png.
 """
 
 import argparse
 import ast
 import csv
+import os
 import platform
 import socket
 import statistics
@@ -48,11 +55,12 @@ METRICS = ROOT / "metrics"
 RAW = METRICS / "raw"
 RESULTS = METRICS / "results.csv"
 RTT_PATHS = METRICS / "rtt_paths.csv"
+NETWORK_ORDER = {"loopback": 0, "lan": 1, "cloudflare": 2, "playit": 3}
 NETLOSS = METRICS / "netloss_mac.sh"
 OS_PORT = 5061
 
 FIELDS = [
-    "proto", "loss_pct", "loss_method", "status", "game_seconds",
+    "network", "proto", "loss_pct", "loss_method", "status", "game_seconds",
     "rtt_samples", "rtt_mean_ms", "rtt_p95_ms",
     "inter_update_mean_ms", "inter_update_std_ms", "inter_update_p99_ms", "inter_update_max_ms",
     "freezes_over_250ms",
@@ -126,11 +134,18 @@ def netloss(*args):
 
 # ---------------------------------------------------------------- one run
 
-def run_one(proto, loss, method, game_seconds, kill_after, port):
+def run_one(proto, loss, method, game_seconds, kill_after, port, host=None, network="loopback"):
+    """One game. host=None: start our own server here (loopback), inject loss, kill carol.
+    host given: the server already runs there; only the bots run here, nobody is killed."""
+    remote = host is not None
     tag = f"{proto}_{method}_loss{round(loss * 100):02d}"
-    print(f"\n== {tag}: {game_seconds:.0f} s game, kill carol after {kill_after:.0f} s")
-    row = {"proto": proto, "loss_pct": round(loss * 100), "loss_method": method,
-           "game_seconds": game_seconds}
+    if remote:
+        tag = f"{network}_{proto}"
+        print(f"\n== {tag}: 3 bots -> {host}:{port}, game length set by that server")
+    else:
+        print(f"\n== {tag}: {game_seconds:.0f} s game, kill carol after {kill_after:.0f} s")
+    row = {"network": network, "proto": proto, "loss_pct": round(loss * 100),
+           "loss_method": method if not remote else "none", "game_seconds": game_seconds}
     if proto == "tcp" and loss > 0 and method == "app":
         row["status"] = "not measured: TCP needs OS-level loss (--loss-method os)"
         print("   skipped:", row["status"])
@@ -138,42 +153,60 @@ def run_one(proto, loss, method, game_seconds, kill_after, port):
 
     drop = ["--drop", str(loss)] if (proto == "udp" and method == "app" and loss > 0) else []
     server_log = RAW / f"{tag}_server.log"
-    server, server_f = start([f"{proto}.server", "--port", str(port),
-                              "--game-seconds", str(game_seconds), *drop], server_log)
-    procs, files = {}, [server_f]
+    server, procs, files = None, {}, []
+    if remote:
+        names = [f"{n}{os.getpid() % 1000}" for n in ("alice", "bob", "carol")]   # don't clash with players
+        room = f"bench{os.getpid() % 10000}"
+    else:
+        names, room = ["alice", "bob", "carol"], "bench"
+        server, server_f = start([f"{proto}.server", "--port", str(port),
+                                  "--game-seconds", str(game_seconds), *drop], server_log)
+        files.append(server_f)
     try:
-        if not wait_text(server_log, "listening on", 10):
+        if not remote and not wait_text(server_log, "listening on", 10):
             row["status"] = "server did not start"
             return row
-        for name in ("alice", "bob", "carol"):
-            p, f = start(["client_ui.bot", "--proto", proto, "--port", str(port), "--name", name,
-                          "--room", "bench", "--players", "3", *drop,
+        for name in names:
+            p, f = start(["client_ui.bot", "--proto", proto, "--host", host or "127.0.0.1",
+                          "--port", str(port), "--name", name,
+                          "--room", room, "--players", "3", *drop,
                           "--metrics-csv", str(RAW / f"{tag}_{name}.csv")], RAW / f"{tag}_{name}.log")
             procs[name] = p
             files.append(f)
             time.sleep(0.2)
         if not all(wait_text(RAW / f"{tag}_{n}.log", "GAME_START", 30) for n in procs):
-            row["status"] = "game did not start"
+            row["status"] = "game did not start" + (f" (see {RAW.relative_to(ROOT)}/{tag}_*.log)" if remote else "")
             return row
-        time.sleep(kill_after)
-        kill_ts = time.time()
-        procs["carol"].kill()                       # SIGKILL (Windows: TerminateProcess)
-        for name in ("alice", "bob"):
-            try:
-                procs[name].wait(game_seconds + 30)
-            except subprocess.TimeoutExpired:
-                pass
+        if remote:
+            for p in procs.values():
+                try:
+                    p.wait(game_seconds + 30)
+                except subprocess.TimeoutExpired:
+                    pass
+        else:
+            time.sleep(kill_after)
+            kill_ts = time.time()
+            procs[names[2]].kill()                  # SIGKILL carol (Windows: TerminateProcess)
+            for name in names[:2]:
+                try:
+                    procs[name].wait(game_seconds + 30)
+                except subprocess.TimeoutExpired:
+                    pass
     finally:
         for p in procs.values():
             if p.poll() is None:
                 p.kill()
-        server.terminate()                          # SIGTERM: prints reliability stats on the way out
-        try:
-            server.wait(5)
-        except subprocess.TimeoutExpired:
-            server.kill()
+        if server:
+            server.terminate()                      # SIGTERM: prints reliability stats on the way out
+            try:
+                server.wait(5)
+            except subprocess.TimeoutExpired:
+                server.kill()
         for f in files:
             f.close()
+
+    if remote:
+        return client_samples(row, tag, proto, names, procs, left=True)
 
     # --- detection time: kill -> server log line
     log = server_log.read_text(errors="replace").splitlines()
@@ -189,9 +222,13 @@ def run_one(proto, loss, method, game_seconds, kill_after, port):
         row["server_retransmissions"] = stats["retransmissions"]
         row["reliable_gave_up"] = stats["gave_up"]
 
-    # --- client samples
+    return client_samples(row, tag, proto, ["alice", "bob"], procs, left)
+
+
+def client_samples(row, tag, proto, names, procs, left):
+    """Pool the bots' raw samples into the row (carol is left out when she was killed)."""
     rtt, inter, received, missing, late, retx, codes = [], [], 0, 0, 0, 0, []
-    for name in ("alice", "bob"):
+    for name in names:
         raw = read_raw(RAW / f"{tag}_{name}.csv")
         rtt += raw.get("rtt", [])
         inter += raw.get("inter_update", [])
@@ -201,7 +238,7 @@ def run_one(proto, loss, method, game_seconds, kill_after, port):
         retx += int(raw.get("total_retransmissions", [0])[0])
         codes.append(procs[name].returncode)
     row.update(
-        status="ok" if codes == [0, 0] and left else f"incomplete (bot exit codes {codes})",
+        status="ok" if all(c == 0 for c in codes) and left else f"incomplete (bot exit codes {codes})",
         rtt_samples=len(rtt),
         rtt_mean_ms=round(statistics.mean(rtt), 3) if rtt else None,
         rtt_p95_ms=round(pct(rtt, 95), 3) if rtt else None,
@@ -217,14 +254,14 @@ def run_one(proto, loss, method, game_seconds, kill_after, port):
         client_retransmissions=retx if proto == "udp" else None,
     )
     print(f"   {row['status']}: rtt {row['rtt_mean_ms']} ms, inter-update mean {row['inter_update_mean_ms']}"
-          f" / max {row['inter_update_max_ms']} ms, missing {row['states_missing_pct']} %,"
-          f" detect {row.get('detect_ms')} ms ({row.get('detect_how')})")
+          f" / max {row['inter_update_max_ms']} ms, missing {row['states_missing_pct']} %"
+          + (f" detect {row.get('detect_ms')} ms ({row.get('detect_how')})" if row.get("detect_how") else ""))
     return row
 
 
 # ---------------------------------------------------------------- RTT of one path
 
-RTT_FIELDS = ["label", "proto", "host", "port", "sent", "samples", "lost_pct",
+RTT_FIELDS = ["network", "proto", "host", "port", "sent", "samples", "lost_pct",
               "rtt_mean_ms", "rtt_p50_ms", "rtt_p95_ms", "rtt_min_ms", "rtt_max_ms", "measured_at"]
 
 
@@ -285,7 +322,7 @@ def save_rtt_path(row):
     if RTT_PATHS.exists():
         with open(RTT_PATHS) as f:
             old = list(csv.DictReader(f))
-    rows = [r for r in old if (r["label"], r["proto"]) != (row["label"], row["proto"])] + [row]
+    rows = [r for r in old if (r["network"], r["proto"]) != (row["network"], row["proto"])] + [row]
     with open(RTT_PATHS, "w", newline="") as f:
         w = csv.DictWriter(f, fieldnames=RTT_FIELDS, extrasaction="ignore")
         w.writeheader()
@@ -295,16 +332,16 @@ def save_rtt_path(row):
 
 def run_rtt_path(args):
     for proto in args.protos:
-        print(f"== RTT {args.label} ({proto}) -> {args.rtt_host}:{args.port}, {args.count} pings every {args.interval} s")
+        print(f"== RTT {args.network} ({proto}) -> {args.host}:{args.port}, {args.count} pings every {args.interval} s")
         try:
-            rtt = measure_rtt(proto, args.rtt_host, args.port, args.count, args.interval)
+            rtt = measure_rtt(proto, args.host, args.port, args.count, args.interval)
         except OSError as exc:
-            sys.exit(f"cannot reach {args.rtt_host}:{args.port} over {proto}: {exc}\n"
+            sys.exit(f"cannot reach {args.host}:{args.port} over {proto}: {exc}\n"
                      "Is the server (and, for a tunnel, `cloudflared access tcp`) running?")
         if not rtt:
             sys.exit(f"no PONG at all over {proto}: wrong port, or this path does not carry {proto.upper()}.")
         row = {
-            "label": args.label, "proto": proto, "host": args.rtt_host, "port": args.port,
+            "network": args.network, "proto": proto, "host": args.host, "port": args.port,
             "sent": args.count, "samples": len(rtt),
             "lost_pct": round(100 * (args.count - len(rtt)) / args.count, 1),
             "rtt_mean_ms": round(statistics.mean(rtt), 3), "rtt_p50_ms": round(pct(rtt, 50), 3),
@@ -324,10 +361,13 @@ def save(rows):
     if RESULTS.exists():
         with open(RESULTS) as f:
             old = list(csv.DictReader(f))
-    key = lambda r: (r["proto"], str(r["loss_pct"]), r["loss_method"])
+    for r in old:
+        r["network"] = r.get("network") or "loopback"   # rows from before the network column
+    key = lambda r: (r["network"], r["proto"], str(r["loss_pct"]), r["loss_method"])
     merged = {key(r): r for r in old}
     merged.update({key(r): r for r in rows})
-    order = sorted(merged.values(), key=lambda r: (r["loss_method"], r["proto"], int(r["loss_pct"])))
+    order = sorted(merged.values(), key=lambda r: (NETWORK_ORDER.get(r["network"], 9), r["network"],
+                                                   r["loss_method"], r["proto"], int(r["loss_pct"])))
     with open(RESULTS, "w", newline="") as f:
         w = csv.DictWriter(f, fieldnames=FIELDS, extrasaction="ignore")
         w.writeheader()
@@ -344,21 +384,43 @@ def main():
     parser.add_argument("--game-seconds", type=float, default=120)
     parser.add_argument("--kill-after", type=float, default=20)
     parser.add_argument("--no-charts", action="store_true")
-    path = parser.add_argument_group("RTT of one path (server already running; --protos defaults to tcp)")
-    path.add_argument("--rtt-host", help="server address as this machine reaches it (127.0.0.1 for a tunnel)")
-    path.add_argument("--port", type=int, default=5050, help="server port, or the local cloudflared port")
-    path.add_argument("--label", default="path", help="name of the path in the CSV/chart, e.g. lan, tunnel")
-    path.add_argument("--count", type=int, default=100)
-    path.add_argument("--interval", type=float, default=0.2, help="seconds between pings")
+    remote = parser.add_argument_group("through a real network (server already running there)")
+    remote.add_argument("--host", help="server IP or hostname as this machine reaches it "
+                                       "(LAN IP, 127.0.0.1 for cloudflared, the playit.gg address)")
+    remote.add_argument("--rtt-host", help=argparse.SUPPRESS)       # old name of --host --rtt-only
+    remote.add_argument("--port", type=int, default=5050, help="server port, cloudflared's local port, or the playit port")
+    remote.add_argument("--network", "--label", default=None,
+                        help="name of the path in the CSV/charts: lan, cloudflare, playit, ...")
+    remote.add_argument("--rtt-only", action="store_true", help="only PING RTT, no game (-> rtt_paths.csv)")
+    remote.add_argument("--count", type=int, default=100, help="--rtt-only: PINGs per protocol")
+    remote.add_argument("--interval", type=float, default=0.2, help="--rtt-only: seconds between PINGs")
     args = parser.parse_args()
 
     if args.rtt_host:
-        if "--protos" not in sys.argv:
-            args.protos = ["tcp"]                       # a Cloudflare tunnel carries TCP only
-        run_rtt_path(args)
+        args.host, args.rtt_only = args.rtt_host, True
+    if args.host:
+        if not args.network:
+            parser.error("--host needs --network NAME (lan, cloudflare, playit, ...)")
+        if args.rtt_only:
+            if "--protos" not in sys.argv:
+                args.protos = ["tcp"]
+            run_rtt_path(args)
+            if not args.no_charts:
+                from make_charts import chart_rtt_paths
+                chart_rtt_paths()
+            return
+        RAW.mkdir(parents=True, exist_ok=True)
+        rows = []
+        try:
+            for proto in args.protos:
+                rows.append(run_one(proto, 0.0, "none", args.game_seconds, 0, args.port,
+                                    host=args.host, network=args.network))
+        finally:
+            if rows:
+                save(rows)
         if not args.no_charts:
-            from make_charts import chart_rtt_paths
-            chart_rtt_paths()
+            from make_charts import main as make_charts
+            make_charts()
         return
 
     RAW.mkdir(parents=True, exist_ok=True)
@@ -375,7 +437,7 @@ def main():
                 loss_on = True
             for proto in args.protos:
                 port = OS_PORT if args.loss_method == "os" else free_port()
-                rows.append(run_one(proto, loss, args.loss_method, args.game_seconds, args.kill_after, port))
+                rows.append(run_one(proto, loss, args.loss_method, args.game_seconds, args.kill_after, port))  # loopback
     finally:
         if args.loss_method == "os":
             netloss("off")

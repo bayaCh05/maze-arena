@@ -3,7 +3,8 @@
 Port **5050** everywhere (TCP and UDP). Every laptop: `cd maze-arena`, venv active
 (macOS `source .venv/bin/activate` · Windows `.venv\Scripts\Activate.ps1`), `git pull` done.
 `S_IP` = the address the server prints at startup. `maze.<domain>` = the Cloudflare Tunnel hostname
-([cloudflare_tunnel.md](cloudflare_tunnel.md)); cloudflared installed on S, A, B, C.
+([cloudflare_tunnel.md](cloudflare_tunnel.md)); cloudflared installed on S, A, B, C. `PLAYIT` = the playit.gg
+UDP address, e.g. `xxx.at.ply.gg:41234` → `--host xxx.at.ply.gg --port 41234` ([playit_udp.md](playit_udp.md)).
 
 ## Roles
 
@@ -24,6 +25,9 @@ Port **5050** everywhere (TCP and UDP). Every laptop: `cd maze-arena`, venv acti
    already on 5050: LAN and tunnel players share it) → "tunnel connected".
    One player, off the LAN (hotspot): `cloudflared access tcp --hostname maze.<domain> --url localhost:15050`,
    then `python scripts/netcheck.py --host 127.0.0.1 --port 15050 --proto tcp` → TCP OK.
+4. playit: the agent on S says **Online** (menu bar / dashboard); its UDP tunnel points to `127.0.0.1:5050`,
+   so the UDP server from step 1 serves LAN and playit players alike. Same hotspot player:
+   `python scripts/netcheck.py --host xxx.at.ply.gg --port 41234 --proto udp` → UDP OK.
 
 ## The demo, in order
 
@@ -33,12 +37,14 @@ Port **5050** everywhere (TCP and UDP). Every laptop: `cd maze-arena`, venv acti
 | 2 | **Kill test (TCP)** | log: `PLAYER_LEFT carol … (FIN)` within ms; game goes on with 2 | C: macOS `pkill -9 -f client_ui.ui` · Windows Task Manager → python.exe → End task |
 | 3 | **UDP game** (+ kill again) | log: `PLAYER_LEFT carol … heartbeat timeout` after ~4 s: no FIN in UDP | same command with `--proto udp` → **R**; C kills again mid-game |
 | 4 | **UDP at 30 % loss** | Ctrl-C the UDP server, `python -m udp.server --port 5050 --drop 0.3` | `… --proto udp … --drop 0.3` → **R**; A reads "lost ~30 %": choppy but never frozen, login/join/ready still worked (reliable messages) |
-| 5 | **Cross-network** (bonus, TCP) | TCP server log on the projector: 3 `CONNECT 127.0.0.1:<port>` + LOGIN lines (explain why 127.0.0.1) | switch to **3 different networks** (campus Wi-Fi, phone hotspot 1, phone hotspot 2); each runs `curl -4 ifconfig.me` (Windows `curl.exe -4 ifconfig.me`) to show a different public IP, then `bash scripts/tunnel_client.sh --hostname maze.<domain> --name alice --room net` (Windows `scripts\tunnel_client.bat maze.<domain> --name alice --room net`) → **R** |
+| 5a | **Cross-network** (bonus, TCP) | TCP server log on the projector: 3 `CONNECT 127.0.0.1:<port>` + LOGIN lines (explain why 127.0.0.1) | switch to **3 different networks** (campus Wi-Fi, phone hotspot 1, phone hotspot 2); each runs `curl -4 ifconfig.me` (Windows `curl.exe -4 ifconfig.me`) to show a different public IP, then `bash scripts/tunnel_client.sh --hostname maze.<domain> --name alice --room net` (Windows `scripts\tunnel_client.bat maze.<domain> --name alice --room net`) → **R** |
+| 5b | **Cross-network** (bonus, UDP) | first restart the UDP server **without** `--drop`; UDP log on the projector: 3 `NEW PEER 127.0.0.1:<port>` (the playit agent) | same 3 networks, nothing extra to install: `python -m client_ui.ui --proto udp --host xxx.at.ply.gg --port 41234 --name alice --room net2` → **R**; C kills the client mid-game → `heartbeat timeout` after ~4 s, as on the LAN |
 
 Talking points for 5 ([cloudflare_tunnel.md §10](cloudflare_tunnel.md#10-bonus-slide-how-it-works)): client → local
 cloudflared → Cloudflare edge → tunnel → cloudflared on S → server on localhost; no open port or NAT
 setup because both cloudflared only connect outward; the server sees 127.0.0.1 (players told apart
-by connection + name); UDP isn't carried by a public hostname (would need Zero Trust + WARP, a VPN-like overlay).
+by connection + name); UDP isn't carried by a Cloudflare public hostname, hence playit.gg for 5b: clients
+send plain UDP to the playit address, the agent on S dialed out (reverse tunnel), the 1 s PING keeps the flow alive.
 Optional extra (S is a Mac, rehearsed): TCP under kernel loss, `sudo sh metrics/netloss_mac.sh on 5050 0.3 0 en0`.
 
 ## Plan B
@@ -48,6 +54,7 @@ Optional extra (S is a Mac, rehearsed): TCP under kernel loss, `sudo sh metrics/
 | netcheck: TIMEOUT on the campus Wi-Fi (client isolation) | everyone joins **S's phone hotspot**; S restarts the servers and reads the new `S_IP` from the banner |
 | Server laptop firewall (macOS prompt / Windows Defender) | allow Python; Windows: Wi-Fi set to *Private* |
 | Tunnel won't connect (campus blocks port 7844 out of S) | S on a phone hotspot, or `cloudflared tunnel run --protocol http2 maze`; see [cloudflare_tunnel.md §8](cloudflare_tunnel.md#8-troubleshooting) |
+| playit: netcheck UDP timeout | agent Online? tunnel type **UDP**, local port **5050**? ([playit_udp.md §8](playit_udp.md#8-troubleshooting)); otherwise show UDP on the LAN only |
 | Tunnel unusable on the day | **Tailscale**: all 4 install and log in to the same tailnet; S runs the servers, clients use `--host <tailscale ip -4 of S>`. Say it is a WireGuard VPN overlay, not a raw internet path |
 | Only one laptop works | everything on S: server + `python -m client_ui.ui …` (host defaults to 127.0.0.1) + two bots: `python -m client_ui.bot --proto tcp --name bob --room demo --players 3` (and carol) |
 | "name already taken" after a crash | wait 5 s (TCP) / 4 s (UDP) or use another name |

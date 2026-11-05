@@ -88,7 +88,9 @@ the latest dir per player and applies it at the next tick.
 Full state every tick (10/s), not deltas. Positions are `[x, y]` grid cells;
 `pellets` / `power_pellets` = remaining ones; `powered` = ticks of power left.
 Body = `common.game.get_state()`; GAME_START body = `common.game.get_setup()`.
-Full STATE with 3 players is ~1170 bytes at game start (test enforces < 1400).
+Full STATE with 3 players at game start: ~1230 bytes with 12-char ASCII names, ~1770 with
+12 non-ASCII chars each (JSON escapes them as \uXXXX); `python metrics/packet_sizes.py`
+measures it. The UDP server logs a warning once per type above `UDP_WARN_SIZE` (1200).
 Clients render the newest tick only.
 
 ```json
@@ -141,7 +143,8 @@ TCP is a byte stream: one `recv()` can hold half a message or three.
 
 - Send: `sock.sendto(encode(msg), addr)`; receive: `data, addr = sock.recvfrom(65535)`.
 - The server identifies clients by `addr` (ip, port) → name mapping after LOGIN.
-- Keep datagrams under ~1400 bytes (fits Ethernet MTU, no IP fragmentation).
+- Keep datagrams under ~1400 bytes (fits Ethernet MTU, no IP fragmentation), and under
+  1200 for tunnels (playit.gg adds headers): `UDP_WARN_SIZE`.
   STATE must stay small: short names, compact JSON.
 - UDP gives no ordering, no delivery, no duplicate protection. `udp/reliability.py`
   runs two channels over the one socket:
