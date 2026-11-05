@@ -45,11 +45,12 @@ def main():
     pygame.init()
     screen = pygame.display.set_mode(render.window_size(g.MAZE_MAP))
     pygame.display.set_caption("Maze Arena — local demo")
-    font = pygame.font.SysFont(None, 30)
+    fonts = render.Fonts()
     clock = pygame.time.Clock()
 
     game = g.new_game(names)
     setup = g.get_setup(game)
+    view = render.GameView(setup, me="you")
     since_tick = 0
     running = True
     while running:
@@ -61,6 +62,7 @@ def main():
                     running = False
                 elif event.key == pygame.K_r:
                     game = g.new_game(names)
+                    view = render.GameView(setup, me="you")
                 elif event.key in KEYS:
                     g.set_direction(game, "you", KEYS[event.key])
 
@@ -71,14 +73,16 @@ def main():
             if args.bot and "bot" in game["players"]:
                 bot_move(game, "bot")
             g.tick(game)
+            view.update(g.get_state(game))
 
-        state = g.get_state(game)
-        power = state["powered"].get("you")
-        render.draw_game(screen, font, setup, state, f"POWER {power / g.TICK_RATE:.1f}s" if power else "")
+        view.draw(screen, fonts, {"room": "local", "net": ["no network: local demo"],
+                                  "hints": [("Arrows/WASD", "move"), ("R", "restart"), ("Esc", "quit")]})
         if g.is_over(game):
-            ranking = ", ".join(f"{r['name']} {r['score']}" for r in g.get_ranking(game))
-            render.draw_lines(screen, font, ["GAME OVER", f"winner: {g.get_winner(game)}",
-                                             ranking, "R = restart, Esc = quit"], top=180)
+            winner = g.get_winner(game)
+            board = pygame.Rect(0, render.TOP, screen.get_width() - render.SIDE, screen.get_height() - render.TOP)
+            render.text(screen, fonts.big, "GAME OVER", render.ACCENT, board.center, "center")
+            render.text(screen, fonts.body, f"winner: {winner or 'draw'}   (R = restart)", render.TEXT,
+                        (board.centerx, board.centery + 44), "center")
         pygame.display.flip()
     pygame.quit()
 

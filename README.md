@@ -108,11 +108,17 @@ doesn't" (UDP firewall rule). Standard library only; macOS, Linux and Windows.
 
 ### In the game
 
-Login (or `--name`) → lobby: **C** create room, **↑/↓ + Enter** join, **L** refresh →
-room: **R** ready (starts when ≥ 2 players are all ready) → game: **arrows/WASD** →
-after GAME_OVER: **Enter** back to the room (a tied top score shows **Draw**).
-**Esc** leaves / quits. RTT is shown in the corner. If the server goes away the window
-shows **Disconnected** (TCP at once, UDP after 10 s of silence); **Esc** closes it.
+Everything works with the mouse (buttons, click a room to join) or the keyboard (keys shown
+at the bottom of each screen): login (or `--name`) → lobby: **C** create room, **↑/↓ + Enter**
+join, **L** refresh → room: **R** ready (starts when ≥ 2 players are all ready) → game:
+**arrows/WASD** → after GAME_OVER: **Enter** play again (a tied top score shows **DRAW!**).
+**Esc** leaves / quits, **M** mutes the sound effects (`--mute` starts muted).
+
+In the game you are the Pac-Man with the white ring and the "YOU" label. The sidebar shows
+the live scores, power-up time left, RTT and (UDP) the share of lost updates. Eat a big
+pellet to be powered up for 5 s: touching another player then sends them back to their
+start and costs them 50 points. If the server goes away the window shows **Disconnected**
+(TCP at once, UDP after 10 s of silence).
 
 ### Other entry points
 
