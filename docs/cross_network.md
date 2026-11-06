@@ -51,8 +51,8 @@ ssh ubuntu@PUBLIC_IP          # default user on Oracle Ubuntu images is "ubuntu"
 
 ### A2. Get the code onto the VM
 
-The repo is **private**, so the VM can't clone it without credentials. Easiest: copy it
-from a laptop (run this **on the laptop**, from the folder that contains `maze-arena`):
+The repo is public, so `setup_vm.sh --repo https://github.com/bayaCh05/maze-arena.git` can
+clone it. Or copy it from a laptop (run this **on the laptop**, from the folder that contains `maze-arena`):
 
 ```bash
 rsync -av --exclude .venv --exclude logs --exclude metrics/raw maze-arena ubuntu@PUBLIC_IP:~/

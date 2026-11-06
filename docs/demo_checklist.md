@@ -13,8 +13,7 @@ Server choice:
 
 ## 1. The day before (every computer)
 
-- [ ] Every laptop can clone the **private** repo (collaborator access, `gh auth login`
-      or a token), or bring the repo on a USB stick / as a zip.
+- [ ] Every laptop has cloned the repo (it's public), or brings it on a USB stick / as a zip.
 - [ ] Repo up to date (`git pull`), venv created, `pip install -r requirements.txt` works.
 - [ ] `python local_demo.py` opens a window and you can move (pygame works on this machine).
 - [ ] `python -m pytest -q -k "not chaos"` passes (do it on S at least).

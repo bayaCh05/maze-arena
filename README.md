@@ -50,11 +50,8 @@ pip install -r requirements.txt
 - After activation the commands below are the same on every OS (`python -m ...`;
   forward slashes like `scripts/netcheck.py` work on Windows too).
 
-The repository is **private**: every machine that clones it needs access. Either
-add the person as a collaborator on GitHub, or log in once with `gh auth login`
-(GitHub CLI) or use a personal access token as the password when `git clone` asks.
-Without access the clone fails with "Repository not found". A zip of the repo
-(GitHub → Code → Download ZIP) also works.
+The repository is public: anyone can clone it (or GitHub → Code → Download ZIP).
+Players joining the public server only need [docs/JOIN.md](docs/JOIN.md).
 
 Always run from the repo root with `python -m ...` (so `common` imports resolve).
 
