@@ -10,7 +10,7 @@ only comes from one Mac (loopback), it says so. File references are `file → fu
 **What it is.** A Pac-Man-style maze game for 2-3 players over the network. Each player moves
 around a 20 × 15 maze, eats pellets (10 points) and power pellets (50 points). A power pellet
 lets you eat the other players for 5 seconds: the victim loses 50 points and respawns.
-A game lasts 2 minutes, or until all pellets are gone, or until one player is left.
+A game lasts 1 minute (server `--game-seconds`), or until all pellets are gone, or until one player is left.
 
 **Why it's competitive.** The players are in the same maze at the same time and race for the
 same pellets; whoever reaches a pellet first gets it, and a power pellet turns the others
@@ -102,7 +102,7 @@ fields; UDP adds `seq` / `ack` / `rel` around them (section 5).
 | `LEAVE_ROOM` | client → server | leave the room (or the game) | `{"type":"LEAVE_ROOM"}` |
 | `READY` | client → server | ready / not ready | `{"type":"READY","ready":true}` |
 | `ROOM_UPDATE` | server → room members | after any join / leave / ready | `{"type":"ROOM_UPDATE","room":"arena1","players":[{"name":"alice","ready":true},{"name":"bob","ready":false}]}` |
-| `GAME_START` | server → room | everyone ready (≥ 2 players) | `{"type":"GAME_START","room":"arena1","tick_rate":10,"max_ticks":1200,"maze":["####…"],"players":["alice","bob","carol"],"colors":{"alice":"yellow","bob":"cyan","carol":"magenta"}}` |
+| `GAME_START` | server → room | everyone ready (≥ 2 players) | `{"type":"GAME_START","room":"arena1","tick_rate":10,"max_ticks":600,"maze":["####…"],"players":["alice","bob","carol"],"colors":{"alice":"yellow","bob":"cyan","carol":"magenta"}}` |
 | `INPUT` | client → server | arrow key pressed (UDP: repeated every tick) | `{"type":"INPUT","dir":"UP"}` |
 | `STATE` | server → players | every tick (10/s) | `{"type":"STATE","tick":42,"positions":{"alice":[1,1],"bob":[7,2]},"pellets":[[2,1],[3,1]],"power_pellets":[[1,2]],"scores":{"alice":120,"bob":70},"powered":{"alice":0,"bob":37}}` |
 | `GAME_OVER` | server → players | time up / no pellets / one player left | `{"type":"GAME_OVER","winner":"alice","ranking":[{"name":"alice","score":30},{"name":"bob","score":15}]}` (`winner` is `null` on a tie) |

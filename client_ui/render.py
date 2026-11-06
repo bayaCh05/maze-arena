@@ -349,7 +349,7 @@ class GameView:
         draw_pac(screen, ACCENT, (32, TOP // 2), 15, "RIGHT", abs(math.sin(now * 6)))
         text(screen, fonts.mid, "MAZE ARENA", ACCENT, (58, TOP // 2), "midleft")
         if self.state:
-            ticks = max(0, self.setup.get("max_ticks", 1200) - self.state["tick"])
+            ticks = max(0, self.setup.get("max_ticks", 600) - self.state["tick"])
             secs = math.ceil(ticks / self.setup.get("tick_rate", 10))
             urgent = secs <= 10
             color = BAD if urgent and int(now * 4) % 2 else (TEXT if not urgent else ACCENT)

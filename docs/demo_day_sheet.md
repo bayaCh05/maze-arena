@@ -6,6 +6,11 @@ Port **5050** everywhere (TCP and UDP). Every laptop: `cd maze-arena`, venv acti
 ([cloudflare_tunnel.md](cloudflare_tunnel.md)); cloudflared installed on S, A, B, C. `PLAYIT` = the playit.gg
 UDP address, e.g. `xxx.at.ply.gg:41234` → `--host xxx.at.ply.gg --port 41234` ([playit_udp.md](playit_udp.md)).
 
+**Clients for the grade: the pygame clients** (`python -m client_ui.ui --proto tcp|udp`) are the
+official TCP and UDP clients and every demo step below uses them. The 3D browser link
+(`deploy/public_addresses.env` → `WEB_URL`) is an extra for the **TCP version only** (WebSocket bridge
+→ TCP server); never present it as a UDP client. Games last **1 minute** (server `--game-seconds`).
+
 ## Roles
 
 | Laptop | Person | Job |

@@ -234,3 +234,54 @@ kbd {
 @media (prefers-reduced-motion: reduce) {
   .btn, .toast, .scoreboard li.bump .score { transition: none; animation: none; }
 }
+
+/* Floating score text above a chomper (Arena.popup) */
+.popup {
+  font: 700 15px/1 var(--font-display);
+  letter-spacing: 0.03em;
+  color: var(--player-color, #fff);
+  text-shadow: 0 0 8px color-mix(in srgb, var(--player-color) 70%, transparent), 0 1px 2px #000;
+  pointer-events: none;
+  white-space: nowrap;
+  animation: popup-in 0.18s ease-out;
+}
+.popup.loss { color: #ff5470; text-shadow: 0 0 8px rgba(255, 84, 112, 0.7), 0 1px 2px #000; font-size: 18px; }
+.popup.streak { font-size: 17px; color: #fff; text-shadow: 0 0 10px var(--player-color), 0 0 18px var(--player-color); }
+/* `scale`, not `transform`: CSS2DRenderer positions the element with an inline transform */
+@keyframes popup-in { from { scale: 0.4; } to { scale: 1; } }
+
+/* "GO!" at game start */
+.banner {
+  position: absolute; inset: 0;
+  display: grid; place-items: center;
+  font: 700 clamp(64px, 16vw, 150px)/1 var(--font-display);
+  letter-spacing: 0.06em;
+  color: #fff;
+  text-shadow: 0 0 24px #2160ff, 0 0 60px #2160ff;
+  pointer-events: none;
+  opacity: 0;
+}
+.banner.show { animation: banner 1.1s ease-out forwards; }
+@keyframes banner {
+  0% { opacity: 0; transform: scale(2.2); }
+  18% { opacity: 1; transform: scale(1); }
+  70% { opacity: 1; transform: scale(1.04); }
+  100% { opacity: 0; transform: scale(1.25); }
+}
+
+/* Screen-edge glow: you are powered (gold) or a rival is (cold blue pulse) */
+.mood {
+  position: absolute; inset: 0;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.35s ease;
+}
+body[data-mood="power"] .mood { opacity: 1; box-shadow: inset 0 0 90px 10px rgba(255, 190, 40, 0.38); }
+body[data-mood="prey"] .mood { opacity: 1; box-shadow: inset 0 0 90px 10px rgba(60, 100, 255, 0.42); animation: prey-pulse 0.9s ease-in-out infinite; }
+@keyframes prey-pulse { 50% { opacity: 0.45; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .banner.show, .popup, body[data-mood="prey"] .mood { animation-duration: 0.01s; }
+}
+
+.proto-note { margin-top: 14px; font: 500 11px/1.4 var(--font-mono); letter-spacing: 0.04em; color: var(--muted); text-wrap: pretty; }

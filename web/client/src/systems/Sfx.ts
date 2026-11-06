@@ -27,9 +27,11 @@ export class Sfx {
     return this.muted;
   }
 
-  chomp(): void {
+  /** @param streak pellets in a row: each one a semitone higher (up to an octave) */
+  chomp(streak = 1): void {
     this.chompFlip = !this.chompFlip;
-    this.tone(this.chompFlip ? 420 : 300, this.chompFlip ? 260 : 380, 0.07, 'square', 0.12);
+    const k = 2 ** ((Math.max(1, streak) - 1) / 12);
+    this.tone((this.chompFlip ? 420 : 300) * k, (this.chompFlip ? 260 : 380) * k, 0.07, 'square', 0.12);
   }
 
   power(): void {

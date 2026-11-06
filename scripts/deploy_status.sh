@@ -23,7 +23,7 @@ if pid_alive tcp_server && lsof -nP -iTCP:"$PORT" -sTCP:LISTEN >/dev/null 2>&1; 
 else
     line DOWN "TCP server" "start: bash scripts/deploy_start.sh"
 fi
-if pid_alive udp_server && lsof -nP -iUDP:"$PORT" >/dev/null 2>&1; then
+if pid_alive udp_server && [ -n "$(udp_holder "$PORT")" ]; then
     line OK "UDP server" "pid $(cat "$DEPLOY_DIR/udp_server.pid"), UDP 0.0.0.0:$PORT"
 else
     line DOWN "UDP server" "start: bash scripts/deploy_start.sh"

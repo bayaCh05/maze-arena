@@ -15,6 +15,7 @@ from common.protocol import (
     READY, ROOM_UPDATE, STATE, make_msg,
 )
 from tcp.server import Server
+from udp.server import Server as UdpServer
 from web.bridge import accept_key, make_server
 
 
@@ -166,3 +167,21 @@ def test_bridge_answers_502_when_the_game_server_is_down(tmp_path):
     finally:
         bridge.shutdown()
         bridge.server_close()
+
+
+def test_bridge_cannot_reach_the_udp_version(tmp_path):
+    # Only the UDP server runs on this port: the bridge speaks TCP only, so the browser is refused.
+    udp = UdpServer("127.0.0.1", 0)
+    port = udp.start()
+    threading.Thread(target=udp.serve_forever, daemon=True).start()
+    bridge = make_server("127.0.0.1", 0, "127.0.0.1", port, tmp_path)
+    threading.Thread(target=bridge.serve_forever, daemon=True).start()
+    try:
+        s = socket.create_connection(("127.0.0.1", bridge.server_address[1]), timeout=3)
+        s.sendall(b"GET /ws HTTP/1.1\r\nHost: x\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n"
+                  b"Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\nSec-WebSocket-Version: 13\r\n\r\n")
+        assert s.recv(64).startswith(b"HTTP/1.1 502")
+    finally:
+        bridge.shutdown()
+        bridge.server_close()
+        udp.stop()

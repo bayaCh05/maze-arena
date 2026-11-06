@@ -220,16 +220,16 @@ def test_no_eating_when_both_or_neither_powered():
 
 # ---------------------------------------------------------------- end of game
 
-def test_timer_ends_game_after_1200_ticks():
+def test_timer_ends_game_after_600_ticks():
     game = g.new_game(["a", "b"])
     for _ in range(g.GAME_TICKS - 1):
         g.tick(game)
     assert not g.is_over(game)
     g.tick(game)
     assert g.is_over(game)
-    assert game["tick"] == 1200
+    assert game["tick"] == 600
     g.tick(game)                           # ticking a finished game is a no-op
-    assert game["tick"] == 1200
+    assert game["tick"] == 600
 
 
 def test_game_ends_when_all_pellets_eaten():

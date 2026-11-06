@@ -39,7 +39,7 @@ start_server() {
     if [ "$proto" = tcp ]; then
         holder=$(lsof -nP -t -iTCP:"$PORT" -sTCP:LISTEN 2>/dev/null || true)
     else
-        holder=$(lsof -nP -t -iUDP:"$PORT" 2>/dev/null || true)
+        holder=$(udp_holder "$PORT")
     fi
     if [ -n "$holder" ]; then
         echo "$proto server: port $PORT is already used by pid $holder, not started:" >&2

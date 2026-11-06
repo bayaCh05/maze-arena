@@ -26,7 +26,8 @@ interface ThreeGameDiagnostics {
   /** Maze Arena extras: current screen, last server tick, measured RTT. */
   screen?: string;
   tick?: number | null;
-  rttMs?: number | null;
+  bufferMs?: number | null;
+    rttMs?: number | null;
 }
 
 interface ThreeGameTestHooks {

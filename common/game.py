@@ -5,7 +5,7 @@ The server owns the only real game; clients just render get_state() output.
 """
 
 TICK_RATE = 10                 # ticks per second
-GAME_TICKS = 2 * 60 * TICK_RATE  # 2 minutes
+GAME_TICKS = 60 * TICK_RATE  # 1 minute (servers: --game-seconds to change it)
 POWER_TICKS = 5 * TICK_RATE    # 5 seconds
 PELLET_POINTS = 10
 POWER_POINTS = 50

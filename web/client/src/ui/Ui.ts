@@ -153,6 +153,15 @@ export class Ui {
     $('#lost-reason').textContent = reason;
   }
 
+  /** Big centred word that punches in and fades ("GO!"). */
+  banner(text: string): void {
+    const el = $('#banner');
+    el.textContent = text;
+    el.classList.remove('show');
+    void el.offsetWidth; // restart the animation
+    el.classList.add('show');
+  }
+
   toast(text: string, bad = false): void {
     const el = document.createElement('div');
     el.className = `toast${bad ? ' bad' : ''}`;

@@ -10,6 +10,10 @@ as that message plus "\\n" (our TCP framing), and every line from the server goe
 one text frame. The bridge never parses or changes messages: the game server sees each
 browser as a normal TCP client (127.0.0.1:<port>), with the same rules and protocol.
 
+TCP only, on purpose: the browser client is an extra for the TCP version. It cannot be used
+for the UDP version (there is no --proto option; the connection to the game server is always
+a TCP stream). The official TCP and UDP clients are the pygame ones (client_ui/).
+
 Standard library only. GET / and the static files come from web/client/dist (npm run build).
 """
 
@@ -239,7 +243,9 @@ def make_server(host, port, game_host, game_port, static_dir=STATIC_DIR):
 
 def main():
     """Parse args, check the client is built, serve until Ctrl-C / SIGTERM."""
-    parser = argparse.ArgumentParser(description="Browser bridge for the Maze Arena TCP server")
+    parser = argparse.ArgumentParser(
+        description="Browser bridge for the Maze Arena TCP server (TCP only: the UDP version "
+                    "is played with the pygame client)")
     parser.add_argument("--host", default="0.0.0.0")
     parser.add_argument("--port", type=int, default=8080)
     parser.add_argument("--game-host", default="127.0.0.1", help="where tcp.server runs")
@@ -252,7 +258,7 @@ def main():
     if not (args.static / "index.html").exists():
         log.warning("%s has no index.html: build the client first (cd web/client && npm run build)", args.static)
     server = make_server(args.host, args.port, args.game_host, args.game_port, args.static)
-    log.info("bridge on http://%s:%d  ->  TCP game server %s:%d  (static: %s)",
+    log.info("bridge on http://%s:%d  ->  TCP game server %s:%d, TCP only  (static: %s)",
              args.host, server.server_address[1], args.game_host, args.game_port,
              os.path.relpath(args.static, ROOT))
     try:

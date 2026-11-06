@@ -13,7 +13,13 @@ the same game logic, **TCP-only** and **UDP-only**, to compare the two transport
 - The pygame UI talks to a transport interface (`send` / `on_message`), so the
   same UI runs on both versions.
 
-## Play in the browser
+## Play in the browser (extra, TCP only)
+
+**The official clients are the pygame ones** (`client_ui/`): `--proto tcp` for the TCP
+version and `--proto udp` for the UDP version. The browser client is an extra for the
+**TCP version only**: browsers cannot open raw sockets, so it goes through a WebSocket
+bridge that opens a TCP connection to `tcp.server`. It cannot reach the UDP server
+(no option for it; `tests/test_ws_bridge.py` checks the bridge refuses a UDP-only port).
 
 `web/` holds a 3D browser client (Three.js) and `web/bridge.py`, a standard-library
 WebSocket bridge that relays each browser's JSON lines to the TCP server, one TCP

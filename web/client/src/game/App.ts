@@ -10,13 +10,15 @@ import { Sfx } from '../systems/Sfx';
 import { Vfx } from '../systems/Vfx';
 import { Ui } from '../ui/Ui';
 import { createSeededRandom } from '../utils/random';
-import { Arena } from './Arena';
+import { Arena, type StateEvents } from './Arena';
 import { PREVIEW_OVER, PREVIEW_ROOM, PREVIEW_START, previewState } from './preview';
 
 const KEY_DIRS: Record<string, Dir> = {
   ArrowUp: 'UP', ArrowDown: 'DOWN', ArrowLeft: 'LEFT', ArrowRight: 'RIGHT',
   KeyW: 'UP', KeyS: 'DOWN', KeyA: 'LEFT', KeyD: 'RIGHT',
 };
+const GRID_STEP: Record<Dir, [number, number]> = { UP: [0, -1], DOWN: [0, 1], LEFT: [-1, 0], RIGHT: [1, 0] };
+const STREAK_GAP = 0.45; // s between two of your pellets that still counts as a streak
 const ROOM_COLORS = [PLAYER_COLORS.yellow, PLAYER_COLORS.cyan, PLAYER_COLORS.magenta];
 
 /**
@@ -46,6 +48,8 @@ export class App {
   private paused = false;
   private reducedMotion = false;
   private swipe: { x: number; y: number } | null = null;
+  private streak = 0;
+  private lastPelletAt = -1;
 
   constructor(private readonly canvas: HTMLCanvasElement) {
     this.renderer = createRenderer(canvas);
@@ -116,7 +120,10 @@ export class App {
       this.elapsed += delta;
       const t = this.reducedMotion ? 0 : this.elapsed;
       this.vfx.update(this.reducedMotion ? 0 : delta);
-      this.arena?.update(delta, t, performance.now());
+      const events = this.arena?.update(delta, t, performance.now()) ?? [];
+      for (const ev of events) this.onReached(ev);
+      this.pipeline.update(this.reducedMotion ? 0 : delta);
+      this.updateMood();
       this.rttTimer -= delta;
       if (this.rttTimer <= 0) {
         this.rttTimer = 0.5;
@@ -195,25 +202,14 @@ export class App {
         this.useArena(msg, this.you);
         this.ui.hudSetup(msg, this.you);
         this.ui.show('game');
+        this.ui.banner('GO!');
         this.sfx.start();
+        this.streak = 0;
         break;
-      case 'STATE': {
-        if (!this.arena || !this.setup) break;
-        const ev = this.arena.apply(msg, performance.now());
-        if (ev.pelletsEaten.some((p) => p.byYou)) this.sfx.chomp();
-        if (ev.powerEaten.some((p) => p.byYou)) this.sfx.power();
-        for (const name of ev.eaten) {
-          if (name === this.you) {
-            this.sfx.eatenSelf();
-            this.ui.toast('You got eaten! -50', true);
-          } else {
-            this.sfx.eatenOther();
-            this.ui.toast(`${name} got eaten`);
-          }
-        }
-        this.ui.hudState(this.setup, msg, this.you);
+      case 'STATE':
+        // Played back smoothly by the arena; its events come out of update().
+        if (this.arena && this.setup) this.arena.push(msg, performance.now());
         break;
-      }
       case 'GAME_OVER':
         this.ui.over(msg, this.setup?.colors ?? {}, this.you);
         this.ui.show('over');
@@ -223,6 +219,49 @@ export class App {
         if (msg.name !== this.you) this.ui.toast(`${msg.name} left`);
         break;
     }
+  }
+
+  /** Playback reached a STATE: sounds, popups, streaks, camera kicks, HUD. */
+  private onReached(ev: StateEvents): void {
+    if (!this.setup || !this.arena) return;
+    const mine = ev.pelletsEaten.some((p) => p.byYou);
+    if (mine) {
+      this.streak = this.elapsed - this.lastPelletAt < STREAK_GAP ? this.streak + 1 : 1;
+      this.lastPelletAt = this.elapsed;
+      this.sfx.chomp(Math.min(this.streak, 12));
+      if (this.streak >= 5 && this.streak % 5 === 0 && this.you) this.arena.popup(this.you, `x${this.streak} streak!`, 'streak');
+    } else if (this.elapsed - this.lastPelletAt > STREAK_GAP) {
+      this.streak = 0;
+    }
+    if (ev.powerEaten.some((p) => p.byYou)) {
+      this.sfx.power();
+      this.pipeline.kick(0.18);
+    }
+    for (const name of ev.eaten) {
+      if (name === this.you) {
+        this.sfx.eatenSelf();
+        this.ui.toast('You got eaten! -50', true);
+        this.pipeline.kick(0.45);
+      } else {
+        this.sfx.eatenOther();
+        this.ui.toast(`${name} got eaten`);
+        this.pipeline.kick(0.12);
+      }
+    }
+    for (const [name, d] of Object.entries(ev.scored)) {
+      // Pellets are frequent: only show popups for bigger swings, and yours every time.
+      if (name === this.you || Math.abs(d) >= 30) this.arena.popup(name, d > 0 ? `+${d}` : `${d}`, d > 0 ? 'gain' : 'loss');
+    }
+    this.ui.hudState(this.setup, ev.state, this.you);
+  }
+
+  /** Screen-edge glow: gold while you are powered, a cold blue pulse while you are prey. */
+  private updateMood(): void {
+    const powered = this.arena?.current?.powered ?? {};
+    const mine = this.you ? powered[this.you] ?? 0 : 0;
+    const prey = !mine && Object.entries(powered).some(([n, p]) => n !== this.you && p > 0);
+    const mood = this.ui.screen !== 'game' ? '' : mine > 0 ? 'power' : prey ? 'prey' : '';
+    if (document.body.dataset.mood !== mood) document.body.dataset.mood = mood;
   }
 
   private onClosed(reason: string): void {
@@ -246,7 +285,10 @@ export class App {
 
   /** dir is what the player pressed or swiped on screen; the server gets the grid direction. */
   private steer(dir: Dir): void {
-    if (this.ui.screen === 'game') this.conn.send({ type: 'INPUT', dir: this.pipeline.screenToGrid(dir) });
+    if (this.ui.screen !== 'game') return;
+    const grid = this.pipeline.screenToGrid(dir);
+    this.conn.send({ type: 'INPUT', dir: grid });
+    this.arena?.intent(...GRID_STEP[grid]);
   }
 
   // ---- UI + input -----------------------------------------------------------------------
@@ -341,7 +383,7 @@ export class App {
           this.you = 'baya';
           this.useArena(PREVIEW_START, 'baya');
           const state = previewState();
-          this.arena!.apply(state, now - 1000);
+          this.arena!.push(state, now - 1000);
           this.ui.hudSetup(PREVIEW_START, 'baya');
           this.ui.hudState(PREVIEW_START, state, 'baya');
           this.ui.rtt(42);
@@ -401,6 +443,7 @@ export class App {
       screen: this.ui.screen,
       tick: state?.tick ?? null,
       rttMs: this.conn.rttMs,
+      bufferMs: this.arena?.bufferMs ?? null,
     };
   }
 }

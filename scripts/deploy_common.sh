@@ -48,3 +48,11 @@ docker_up() {
 playit_running() {
     docker_up && [ "$(docker inspect -f '{{.State.Running}}' "$PLAYIT_CONTAINER" 2>/dev/null)" = true ]
 }
+
+# udp_holder PORT: pids with a UDP socket bound locally to PORT (a server), not clients whose
+# socket is merely connected to PORT (e.g. "127.0.0.1:60710->127.0.0.1:5050")
+udp_holder() {
+    lsof -nP -iUDP:"$1" -Fpn 2>/dev/null \
+        | awk -v port=":$1" '/^p/ {pid = substr($0, 2)} /^n/ && $0 !~ /->/ && substr($0, length($0) - length(port) + 1) == port {print pid}' \
+        | sort -u
+}

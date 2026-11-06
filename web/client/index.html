@@ -19,7 +19,7 @@
       <section id="hud" hidden aria-live="polite">
         <div class="hud-top">
           <ol id="scoreboard" class="scoreboard" aria-label="Scores"></ol>
-          <div class="timer" aria-label="Time left"><span class="label">Time</span><strong id="timer">2:00</strong></div>
+          <div class="timer" aria-label="Time left"><span class="label">Time</span><strong id="timer">1:00</strong></div>
           <div class="hud-right">
             <div id="power-meter" class="power-meter" hidden>
               <span class="label">Power</span>
@@ -58,6 +58,7 @@
             <button id="play-btn" class="btn btn-primary" type="submit">Play</button>
             <p id="login-error" class="error" role="alert"></p>
           </form>
+          <p class="proto-note">Browser version &middot; TCP only (WebSocket bridge). The UDP version is played with the Python client.</p>
           <ul class="controls-legend">
             <li><kbd>&#8592;</kbd><kbd>&#8593;</kbd><kbd>&#8594;</kbd><kbd>&#8595;</kbd> or <kbd>WASD</kbd> steer</li>
             <li><kbd>R</kbd> ready &middot; <kbd>M</kbd> sound &middot; phone: swipe or d-pad</li>
@@ -103,6 +104,8 @@
         </div>
       </section>
 
+      <div id="mood" class="mood" aria-hidden="true"></div>
+      <div id="banner" class="banner" aria-hidden="true"></div>
       <div id="toasts" class="toasts" aria-live="polite"></div>
     </main>
     <script type="module" src="/src/main.ts"></script>

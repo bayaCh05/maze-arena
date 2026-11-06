@@ -21,6 +21,8 @@ export class RenderPipeline {
   maxDpr = 2;
   /** Portrait screens: the camera turns 90 degrees so the maze's long side runs up the screen. */
   rotated = false;
+  private shake = 0;
+  private readonly rest = new THREE.Vector3();
 
   constructor(
     readonly renderer: THREE.WebGLRenderer,
@@ -88,6 +90,7 @@ export class RenderPipeline {
     this.camera.position.set(this.rotated ? back : 0, Math.sin(pitch) * dist, this.rotated ? 0 : back);
     this.camera.lookAt(this.rotated ? 0.35 : 0, 0, this.rotated ? 0 : 0.35);
     this.camera.updateProjectionMatrix();
+    this.rest.copy(this.camera.position);
   }
 
   /** A direction as the player sees it on screen -> the grid direction the server expects. */
@@ -95,6 +98,23 @@ export class RenderPipeline {
     if (!this.rotated) return dir;
     // Camera on +X looking at -X: screen up = grid LEFT, screen right = grid UP.
     return ({ UP: 'LEFT', RIGHT: 'UP', DOWN: 'RIGHT', LEFT: 'DOWN' } as const)[dir];
+  }
+
+  /** Camera kick for big moments (power-up, getting eaten); decays in a fraction of a second. */
+  kick(amount: number): void {
+    this.shake = Math.max(this.shake, amount);
+  }
+
+  update(delta: number): void {
+    if (this.shake <= 0 && delta > 0) return;
+    this.shake = Math.max(0, this.shake - delta * 1.6);
+    const s = this.shake * this.shake;
+    const t = performance.now() / 1000;
+    this.camera.position.set(
+      this.rest.x + Math.sin(t * 53) * s,
+      this.rest.y + Math.sin(t * 61 + 1) * s * 0.6,
+      this.rest.z + Math.sin(t * 47 + 2) * s,
+    );
   }
 
   render(): void {
