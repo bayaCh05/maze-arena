@@ -13,6 +13,15 @@ the same game logic, **TCP-only** and **UDP-only**, to compare the two transport
 - The pygame UI talks to a transport interface (`send` / `on_message`), so the
   same UI runs on both versions.
 
+## Play in the browser
+
+`web/` holds a 3D browser client (Three.js) and `web/bridge.py`, a standard-library
+WebSocket bridge that relays each browser's JSON lines to the TCP server, one TCP
+connection per browser, so the server and the protocol are unchanged. The host runs
+`bash scripts/deploy_start.sh`, which also starts the bridge on port 8080 and an https
+quick tunnel to it; players just open that link (see [docs/JOIN.md](docs/JOIN.md) and
+[web/README.md](web/README.md)). The Python TCP and UDP clients stay the course versions.
+
 ## Requirements
 
 - Python **3.10+** (developed on 3.14, also checked on 3.11)

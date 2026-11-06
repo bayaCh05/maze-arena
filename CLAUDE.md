@@ -55,7 +55,12 @@ netutil/     addresses.py                     # startup banner, resolve --host o
 scripts/     netcheck.py                      # standalone TCP/UDP reachability check (stdlib only)
              tunnel_server.sh, tunnel_client.{sh,bat}   # Cloudflare Tunnel helpers, TCP (docs/cloudflare_tunnel.md)
              playit_server.sh                 # UDP server behind a playit.gg tunnel (docs/playit_udp.md)
+             deploy_{start,stop,status}.sh    # public deployment on the Mac (logs/deploy/, git-ignored)
+web/         bridge.py                        # stdlib: serves web/client/dist + WebSocket /ws, one TCP
+                                              # connection per browser; it is just another TCP client
+             client/                          # Three.js browser client (Vite + TypeScript), renders STATE only
 deploy/      setup_vm.sh, maze-arena-{tcp,udp}.service   # cloud VM setup + systemd units
+             public_addresses.env             # WEB_URL + tunnel addresses, read by the launchers
 metrics/     CSV output of measurements
 tests/       pytest
 ```
@@ -80,4 +85,6 @@ Servers differ only in transport: lobby, rooms and the game loop are in
 ## Dependencies
 
 Standard library + pygame (installed as `pygame-ce`, same `import pygame`) for networking/game; matplotlib only for metric
-plots; pytest for tests. Nothing else without asking.
+plots; pytest for tests. The browser client in `web/client/` uses npm (three, vite,
+typescript, playwright for its checks); it is optional and never imported by Python code.
+Nothing else without asking.

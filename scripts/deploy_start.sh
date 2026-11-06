@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Start (or restart the missing parts of) the public Maze Arena deployment on this Mac:
 #   TCP server + UDP server on 0.0.0.0:5050, Cloudflare quick tunnel (TCP backup route),
+#   browser version: web/bridge.py on :8080 + an https Cloudflare quick tunnel (the link),
 #   playit agent in Docker (UDP and TCP tunnels), caffeinate (no sleep).
 # Parts already running are left alone, so it is safe to run again. Ends with deploy_status.sh.
 #
@@ -55,6 +56,22 @@ start_server() {
 start_server tcp || true
 start_server udp || true
 
+# Browser version: build the client if needed, then the bridge (WebSocket -> TCP server).
+if [ ! -f "$ROOT/web/client/dist/index.html" ] && command -v npm >/dev/null; then
+    echo "web client: building (first time)..."
+    (cd "$ROOT/web/client" && npm install --no-audit --no-fund >/dev/null && npm run build >/dev/null) \
+        || echo "web client: build failed, run: cd web/client && npm install && npm run build" >&2
+fi
+if pid_alive bridge; then
+    echo "web bridge: already running"
+elif lsof -nP -iTCP:"$WEB_PORT" -sTCP:LISTEN >/dev/null 2>&1; then
+    echo "web bridge: port $WEB_PORT already in use, not started" >&2
+else
+    nohup "$PY" -u -m web.bridge --port "$WEB_PORT" --game-port "$PORT" >> "$DEPLOY_DIR/bridge.log" 2>&1 &
+    echo $! > "$DEPLOY_DIR/bridge.pid"
+    echo "web bridge: started (pid $!, http://localhost:$WEB_PORT)"
+fi
+
 # Cloudflare quick tunnel: a new random hostname every time it starts.
 if pid_alive cloudflared; then
     echo "cloudflare tunnel: already running"
@@ -82,6 +99,30 @@ elif command -v cloudflared >/dev/null; then
     fi
 else
     echo "cloudflare tunnel: cloudflared not installed (brew install cloudflared), skipped"
+fi
+
+# The link players open: an https quick tunnel to the bridge (WebSocket works through it).
+if pid_alive web_tunnel; then
+    echo "web link: already running"
+elif command -v cloudflared >/dev/null; then
+    old=$(get_addr WEB_URL)
+    : > "$DEPLOY_DIR/web_tunnel.log"
+    nohup cloudflared tunnel --no-autoupdate --url "http://localhost:$WEB_PORT" \
+        > "$DEPLOY_DIR/web_tunnel.log" 2>&1 &
+    echo $! > "$DEPLOY_DIR/web_tunnel.pid"
+    url=""
+    for _ in $(seq 60); do
+        url=$(web_url)
+        [ -n "$url" ] && break
+        sleep 0.5
+    done
+    if [ -n "$url" ]; then
+        set_addr WEB_URL "$url"
+        echo "web link: $url"
+        if [ "$url" != "$old" ]; then echo "  NEW LINK (was ${old:-none}): send it to the players."; fi
+    else
+        echo "web link: no address after 30 s, see logs/deploy/web_tunnel.log" >&2
+    fi
 fi
 
 # playit agent in Docker. --restart unless-stopped: it comes back after a Docker or Mac

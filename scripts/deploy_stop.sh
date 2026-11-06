@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Stop the public Maze Arena deployment: both servers, the Cloudflare quick tunnel, the
+# Stop the public Maze Arena deployment: both servers, the web bridge, both quick tunnels, the
 # playit container (kept, so deploy_start.sh restarts it without the key) and caffeinate.
 #
 #   bash scripts/deploy_stop.sh
@@ -24,6 +24,8 @@ stop() {
 
 stop tcp_server
 stop udp_server
+stop bridge
+stop web_tunnel
 stop cloudflared
 if playit_running; then
     docker stop "$PLAYIT_CONTAINER" >/dev/null && echo "playit agent: stopped"

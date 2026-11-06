@@ -28,6 +28,16 @@ if pid_alive udp_server && lsof -nP -iUDP:"$PORT" >/dev/null 2>&1; then
 else
     line DOWN "UDP server" "start: bash scripts/deploy_start.sh"
 fi
+if pid_alive bridge && lsof -nP -iTCP:"$WEB_PORT" -sTCP:LISTEN >/dev/null 2>&1; then
+    line OK "web bridge" "pid $(cat "$DEPLOY_DIR/bridge.pid"), http://localhost:$WEB_PORT -> TCP $PORT"
+else
+    line DOWN "web bridge" "start: bash scripts/deploy_start.sh"
+fi
+if pid_alive web_tunnel && [ -n "$(web_url)" ]; then
+    line OK "web link" "$(web_url)"
+else
+    line DOWN "web link" "https quick tunnel not running"
+fi
 if pid_alive cloudflared && [ -n "$(cloudflare_host)" ]; then
     line OK "Cloudflare tunnel" "$(cloudflare_host) -> localhost:$PORT (TCP)"
 else
@@ -52,6 +62,7 @@ fi
 
 echo
 echo "Public addresses (deploy/public_addresses.env):"
+printf '  %-15s %s\n' "Browser link" "$(get_addr WEB_URL || true)"
 printf '  %-15s %s\n' "UDP (playit)" "$(get_addr PLAYIT_UDP || true)"
 printf '  %-15s %s\n' "TCP (playit)" "$(get_addr PLAYIT_TCP || true)"
 printf '  %-15s %s\n' "TCP (Cloudflare)" "$(get_addr CLOUDFLARE_TCP || true)"

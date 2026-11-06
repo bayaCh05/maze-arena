@@ -3,6 +3,19 @@
 Maze Arena is a 2-3 player maze game over the network. The server runs on the host's Mac;
 you only need Python and this repository. About 5 minutes the first time.
 
+## Easiest: open the link (nothing to install)
+
+Open the **browser link** the host sends you (it looks like
+`https://something.trycloudflare.com`, also in `deploy/public_addresses.env` as `WEB_URL`)
+in Chrome, Edge, Safari or Firefox, on a computer or a phone. Type your name, press **Play**,
+then **Ready**. Move with the arrow keys / WASD, swipes or the on-screen pad.
+
+The browser version is the same game on the same server (it joins over TCP through a small
+WebSocket bridge), so you can play against people using the Python clients below.
+If the link stops working, the host restarted the tunnel: ask for the new one.
+
+The rest of this page is the **Python client** (the TCP and UDP versions of the course project).
+
 ## 1. Install Python (once)
 
 - **macOS**: <https://www.python.org/downloads/>, install Python 3.12 or 3.13.

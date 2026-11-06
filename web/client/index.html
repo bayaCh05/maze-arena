@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#04060f" />
+    <meta name="description" content="Maze Arena: a 2-3 player neon maze race. Open the link, pick a name, play." />
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M16 3a13 13 0 1 0 11.3 19.5L16 16l11.3-6.5A13 13 0 0 0 16 3z' fill='%23ffd600'/%3E%3C/svg%3E" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;700&family=JetBrains+Mono:wght@500;700&display=swap" />
+    <title>Maze Arena</title>
+  </head>
+  <body>
+    <main id="app">
+      <canvas id="game-canvas" aria-label="Maze Arena game view"></canvas>
+
+      <!-- In-game HUD -->
+      <section id="hud" hidden aria-live="polite">
+        <div class="hud-top">
+          <ol id="scoreboard" class="scoreboard" aria-label="Scores"></ol>
+          <div class="timer" aria-label="Time left"><span class="label">Time</span><strong id="timer">2:00</strong></div>
+          <div class="hud-right">
+            <div id="power-meter" class="power-meter" hidden>
+              <span class="label">Power</span>
+              <div class="bar"><div id="power-fill"></div></div>
+            </div>
+          </div>
+        </div>
+        <div class="hud-bottom">
+          <span id="hint" class="hint">Arrows / WASD to steer</span>
+          <span id="rtt" class="rtt">RTT --</span>
+        </div>
+      </section>
+
+      <div id="dpad" class="dpad" hidden aria-label="Direction pad">
+        <button type="button" data-dir="UP" aria-label="Up"><span>&#9650;</span></button>
+        <button type="button" data-dir="LEFT" aria-label="Left"><span>&#9664;</span></button>
+        <button type="button" data-dir="RIGHT" aria-label="Right"><span>&#9654;</span></button>
+        <button type="button" data-dir="DOWN" aria-label="Down"><span>&#9660;</span></button>
+      </div>
+
+      <button id="mute" class="icon-btn mute" type="button" aria-label="Mute sound" title="Sound (M)">&#9835;</button>
+
+      <!-- Title / login -->
+      <section id="screen-login" class="screen">
+        <div class="panel panel-login">
+          <h1 class="logo">MAZE<span>ARENA</span></h1>
+          <p class="tagline">Race up to 3 players through a neon maze. Grab a power pellet and hunt them.</p>
+          <form id="login-form" autocomplete="off">
+            <label for="name-input">Your name</label>
+            <input id="name-input" name="name" maxlength="12" required placeholder="1-12 characters" />
+            <details>
+              <summary>Room</summary>
+              <label for="room-input" class="sr-only">Room name</label>
+              <input id="room-input" name="room" maxlength="12" value="demo" />
+            </details>
+            <button id="play-btn" class="btn btn-primary" type="submit">Play</button>
+            <p id="login-error" class="error" role="alert"></p>
+          </form>
+          <ul class="controls-legend">
+            <li><kbd>&#8592;</kbd><kbd>&#8593;</kbd><kbd>&#8594;</kbd><kbd>&#8595;</kbd> or <kbd>WASD</kbd> steer</li>
+            <li><kbd>R</kbd> ready &middot; <kbd>M</kbd> sound &middot; phone: swipe or d-pad</li>
+          </ul>
+        </div>
+      </section>
+
+      <!-- Room -->
+      <section id="screen-room" class="screen" hidden>
+        <div class="panel panel-room">
+          <p class="eyebrow">Room</p>
+          <h2 id="room-name">demo</h2>
+          <ul id="room-players" class="room-players"></ul>
+          <p id="room-hint" class="hint-line">Waiting for players: 2-3, everyone ready to start.</p>
+          <div class="row">
+            <button id="ready-btn" class="btn btn-primary" type="button">I'm ready</button>
+            <button id="leave-btn" class="btn btn-ghost" type="button">Leave</button>
+          </div>
+          <p class="share">Invite friends: send them this page's link.</p>
+        </div>
+      </section>
+
+      <!-- Game over -->
+      <section id="screen-over" class="screen" hidden>
+        <div class="panel panel-over">
+          <p class="eyebrow">Game over</p>
+          <h2 id="over-title">Winner</h2>
+          <ol id="over-ranking" class="ranking"></ol>
+          <div class="row">
+            <button id="again-btn" class="btn btn-primary" type="button">Play again</button>
+            <button id="over-leave-btn" class="btn btn-ghost" type="button">Leave</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Connection lost -->
+      <section id="screen-lost" class="screen" hidden>
+        <div class="panel">
+          <p class="eyebrow">Disconnected</p>
+          <h2>Connection lost</h2>
+          <p id="lost-reason" class="hint-line">The game server stopped answering.</p>
+          <button id="reconnect-btn" class="btn btn-primary" type="button">Reconnect</button>
+        </div>
+      </section>
+
+      <div id="toasts" class="toasts" aria-live="polite"></div>
+    </main>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

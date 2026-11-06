@@ -8,6 +8,7 @@ PLAYIT_ENV="$DEPLOY_DIR/playit.env"          # SECRET_KEY=... (never committed)
 PLAYIT_CONTAINER=maze-playit
 PLAYIT_IMAGE=ghcr.io/playit-cloud/playit-agent:latest
 PORT="${PORT:-5050}"
+WEB_PORT="${WEB_PORT:-8080}"          # web/bridge.py: browser client + WebSocket relay
 PY="$ROOT/.venv/bin/python"
 [ -x "$PY" ] || PY=python3
 mkdir -p "$DEPLOY_DIR"
@@ -32,7 +33,12 @@ set_addr() {
 
 # cloudflare_host: current quick tunnel hostname, read from the running tunnel's log
 cloudflare_host() {
-    grep -oE '[a-z0-9-]+\.trycloudflare\.com' "$DEPLOY_DIR/cloudflared.log" 2>/dev/null | head -1
+    grep -oE '[a-z0-9-]+\.trycloudflare\.com' "$DEPLOY_DIR/cloudflared.log" 2>/dev/null | head -1 || true
+}
+
+# web_url: https link of the browser version (quick tunnel to the bridge), from its log
+web_url() {
+    grep -oE 'https://[a-z0-9-]+\.trycloudflare\.com' "$DEPLOY_DIR/web_tunnel.log" 2>/dev/null | head -1 || true
 }
 
 docker_up() {
