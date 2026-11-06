@@ -52,7 +52,9 @@ if errorlevel 1 (
 
 echo cloudflared access tcp --hostname %TUNNEL_HOST% --url localhost:%LOCAL_PORT%  (log: %CF_LOG%)
 set "CF_PID="
-for /f %%P in ('powershell -NoProfile -Command "(Start-Process -FilePath '%CLOUDFLARED%' -ArgumentList 'access','tcp','--hostname','%TUNNEL_HOST%','--url','localhost:%LOCAL_PORT%' -NoNewWindow -RedirectStandardError '%CF_LOG%' -PassThru).Id"') do set "CF_PID=%%P"
+rem Both stdout and stderr go to files: if cloudflared inherited this pipe, for /f would
+rem wait for it to close, i.e. until cloudflared exits, and the game would never start.
+for /f %%P in ('powershell -NoProfile -Command "(Start-Process -FilePath '%CLOUDFLARED%' -ArgumentList 'access','tcp','--hostname','%TUNNEL_HOST%','--url','localhost:%LOCAL_PORT%' -WindowStyle Hidden -RedirectStandardOutput '%CF_LOG%.out' -RedirectStandardError '%CF_LOG%' -PassThru).Id"') do set "CF_PID=%%P"
 if "%CF_PID%"=="" (
     echo could not start cloudflared
     exit /b 1
