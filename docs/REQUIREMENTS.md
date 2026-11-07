@@ -73,7 +73,7 @@ Legend: **Tested** = automated tests and/or a real multi-process run on one mach
 |---|---|---|---|---|
 | D1 | Tested · 4 PCs: **not verified yet** | Tested · 4 PCs: **not verified yet** | 3 separate bot processes + server per protocol: `tests/chaos_test.py`, `metrics/run_benchmark.py`; `test_three_clients_from_the_same_ip` (tcp, udp); 2-PC run reported by the team | Run [FOUR_PC_TEST.md](FOUR_PC_TEST.md) steps 1-6 and keep the 4 zips from `collect_logs` |
 | D2 | Tested | Tested | Shared `common/` (`game.py`, `rooms.py`, `server_core.py`); `tests/test_format_parity.py` (both deliver identical messages) | 4 PCs: not verified yet |
-| D3 | **Missing** | **Missing** | No slide deck in the repo; data ready: `metrics/results.csv`, `metrics/charts/*.png` | Make the 5-7 slides (plan: architecture, TCP design, UDP design, concurrency/disconnections, metrics, friction points, bonus) |
+| D3 | Done | Done | 7 slides `slides/maze_arena_tcp_vs_udp.pptx`, built by `slides/build_slides.py` from `metrics/results.csv`; script [presentation_script.md](presentation_script.md) (6 min 20 s) | Re-run the build after LAN/internet measurements; fill in team names |
 | D4 | Done | Done | `README.md` (install, run, flags, Windows), `docs/JOIN.md`, `docs/demo_day_sheet.md`, launchers | — |
 | B1 | Partial · real remote player **not verified yet** | **Not done** | TCP: Cloudflare quick tunnel up; full games through the public link from the server Mac (browser client, 2026-11-06/07); `scripts/join_tcp.*`, `docs/cloudflare_tunnel.md`. UDP: playit agent online, **no UDP tunnel created** (skipped 2026-11-07) | TCP: one real player on another network (phone hotspot) plays a full game, proof with `curl -4 ifconfig.me`. UDP: create the playit UDP tunnel, then the same |
 | M1 | Tested · 4 PCs: not verified yet | Tested · 4 PCs: not verified yet | `test_login_and_duplicate_name` (tcp), `test_login_duplicate_and_full_game` (udp), `test_valid_name` | 4 PCs |
@@ -108,8 +108,29 @@ Legend: **Tested** = automated tests and/or a real multi-process run on one mach
 - **Metrics: complete** for 0/10/30 % loss, both protocols (different loss methods, see X3).
 - **Not verified yet on 4 real computers**: every requirement above. Run
   [FOUR_PC_TEST.md](FOUR_PC_TEST.md) and keep the `collect_logs` zips as evidence.
-- **Missing deliverable: the 5-7 slides (D3).**
+- **Slides (D3): done**, 7 slides generated from the metrics (see section 3).
 - **Bonus (B1)**: TCP path works through the public tunnel but no real remote player has
   finished a game yet; UDP across networks not done (no playit UDP tunnel).
 - Extra, not graded by the plan: a 3D browser client (TCP only, through `web/bridge.py`),
   clearly labelled as such; the pygame clients are the official TCP and UDP clients.
+
+## 3. Presentation format (D3)
+
+- 5 to 7 slides, presented live in under 7 minutes.
+- Built by `slides/build_slides.py` from `metrics/results.csv` and `metrics/charts/`
+  (re-run it after new measurements); output `slides/maze_arena_tcp_vs_udp.pptx`.
+- Speaker notes and timings: [presentation_script.md](presentation_script.md).
+
+## 4. Technical explanation (what the slides must show)
+
+| # | Sentence from the plan | Slide |
+|---|---|---|
+| S1 | Present the socket architecture of each version. | 2 (TCP), 3 (UDP) |
+| S2 | Show how each version uses TCP or UDP. | 2, 3 |
+| S3 | Compare the two versions with our own metrics. | 5 |
+| S4 | Explain the friction points we met. | 6 |
+| S5 | Say where each protocol performed best. | 5 (takeaway), 6 |
+| S6 | Explain the technical differences between TCP and UDP. | 6 |
+| S7 | Explain how simultaneous players are handled in each version. | 4 |
+| S8 | Explain how disconnections are handled in each version. | 4 |
+| S9 | Bonus: show the setup for playing across different networks. | 7 |
