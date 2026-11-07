@@ -223,6 +223,7 @@ Output: `metrics/results.csv` + `metrics/charts/networks.png` (and `rtt_paths.*`
 ## Documentation
 
 - [docs/demo_day_sheet.md](docs/demo_day_sheet.md): one page for demo day (roles, commands per laptop, order, plan B)
+- [docs/FOUR_PC_TEST.md](docs/FOUR_PC_TEST.md): **rehearsal on 4 laptops** (who does what, macOS/Windows commands, checks, common problems, `scripts/collect_logs.sh|.bat`)
 - [docs/demo_checklist.md](docs/demo_checklist.md): the 4-computer demo, step by step, with the live script
 - [docs/cloudflare_tunnel.md](docs/cloudflare_tunnel.md): **cross-network bonus, TCP**: server on the Mac, players on other networks through a Cloudflare Tunnel; bonus-slide explanation of both paths
 - [docs/playit_udp.md](docs/playit_udp.md): **cross-network bonus, UDP**: playit.gg agent on the Mac, clients connect directly to the playit address

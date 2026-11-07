@@ -44,7 +44,9 @@ else
     line DOWN "Cloudflare tunnel" "quick tunnel not running"
 fi
 if playit_running; then
-    if docker logs --tail 50 "$PLAYIT_CONTAINER" 2>&1 | grep -qiE 'invalid|unauthorized|SECRET_KEY'; then
+    # Judge by the latest outcome only: old "Unauthorized" lines stay in the log after a fix.
+    last=$(docker logs --tail 200 "$PLAYIT_CONTAINER" 2>&1 | grep -oiE 'playit connected|unauthorized|invalid secret|SECRET_KEY' | tail -1)
+    if [ "$last" != "playit connected" ]; then
         line DOWN "playit agent" "container runs but the key is refused: docker logs $PLAYIT_CONTAINER"
     else
         line OK "playit agent" "docker container $PLAYIT_CONTAINER (Online? see playit.gg → Agents)"

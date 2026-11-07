@@ -6,6 +6,8 @@ which only asks the OS which interface it would use.
 """
 
 import ipaddress
+
+from netutil.version import commit
 import platform
 import re
 import socket
@@ -137,6 +139,7 @@ def startup_banner(proto, host, port, public_ip=None):
     width = max([len(ip) for ip, _ in addrs] + [15])
 
     lines = [f"Maze Arena {proto.upper()} server, port {port} ({proto.upper()}), bound to {host or '0.0.0.0'}",
+             f"Code version (commit): {commit()}  (every client prints its own: they must match)",
              "Players connect to ONE of these addresses (the one on their network):"]
     lines += [f"  {ip:<{width}}  {desc}" for ip, desc in addrs] or ["  (no network address found: offline?)"]
     lines += ["Client command to copy (change the name):",

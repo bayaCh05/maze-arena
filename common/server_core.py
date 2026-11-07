@@ -152,7 +152,8 @@ class GameServer:
         except rooms.RoomError as exc:
             session.send(self._room_list(error=str(exc)))
             return
-        self.log.info("JOIN %s -> %r", session.name, room)
+        self.log.info("JOIN %s -> room %r (%d/%d players)", session, room,
+                      len(self.lobby["rooms"][room]["players"]), game.MAX_PLAYERS)
         self._send_room_update(room)
         self._broadcast_room_list()
 
@@ -211,7 +212,8 @@ class GameServer:
         start = make_msg(GAME_START, room=room, **game.get_setup(runner.game))
         for session in self._members(room):
             session.send(start)
-        self.log.info("GAME_START %r players=%s", room, names)
+        self.log.info("GAME_START room %r, %d s, players: %s", room, self.game_ticks // game.TICK_RATE,
+                      ", ".join(self._who(n) for n in names))
         self._broadcast_room_list()
         runner.start()
 
@@ -230,12 +232,18 @@ class GameServer:
         ranking = game.get_ranking(runner.game)
         winner = game.get_winner(runner.game)
         self.broadcast_game(runner, make_msg(GAME_OVER, ranking=ranking, winner=winner))
-        self.log.info("GAME_OVER %r tick=%d winner=%s ranking=%s",
-                      runner.room, runner.game["tick"], winner, ranking)
+        self.log.info("GAME_OVER room %r tick=%d winner=%s ranking: %s", runner.room, runner.game["tick"],
+                      self._who(winner) if winner else "none (draw)",
+                      ", ".join(f"{i}. {r['name']} {r['score']}" for i, r in enumerate(ranking, 1)))
         rooms.end_game(self.lobby, runner.room)
         if runner.room in self.lobby["rooms"]:
             self._send_room_update(runner.room)
         self._broadcast_room_list()
+
+    def _who(self, name):
+        """'alice@192.168.1.23:51234' while connected, else just the name."""
+        session = self.clients.get(name)
+        return str(session) if session is not None else name
 
     def _leave_room(self, session, why):
         """Take a player out of their room (and game). Lock must be held."""
@@ -247,7 +255,7 @@ class GameServer:
         runner = self.games.get(room)
         if runner is not None:
             game.remove_player(runner.game, name)   # game thread sends GAME_OVER if needed
-        self.log.info("PLAYER_LEFT %s from %r (%s)%s", name, room, why,
+        self.log.info("PLAYER_LEFT %s from room %r (%s)%s", session, room, why,
                       " during game" if runner else "")
         left = make_msg(PLAYER_LEFT, name=name)
         for member in self._members(room):

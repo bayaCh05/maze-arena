@@ -25,6 +25,7 @@ from common.protocol import (
     ROOM_UPDATE, STATE, make_msg,
 )
 from common.rooms import ROOM_NAME_MAX
+from netutil.version import commit
 
 FPS = 60
 KEYS = {
@@ -489,6 +490,8 @@ def main():
     parser.add_argument("--mute", action="store_true", help="start with sound off (M toggles it)")
     args = parser.parse_args()
 
+    version = commit()
+    print(f"Maze Arena client, code version (commit) {version}: must match the server's banner")
     try:
         transport = make_transport(args.proto, args.host, args.port, args.drop)
     except (OSError, ValueError) as exc:
@@ -503,7 +506,8 @@ def main():
     clock = pygame.time.Clock()
     sounds = sfx.Sfx()
     sounds.muted = args.mute
-    subtitle = f"{args.proto.upper()} server {args.host}:{args.port}" + (f"   drop {args.drop:.0%}" if args.drop else "")
+    subtitle = (f"{args.proto.upper()} server {args.host}:{args.port}" + (f"   drop {args.drop:.0%}" if args.drop else "")
+                + f"   code {version}")
     app = App(transport, args.name, args.room, args.proto, sounds, subtitle)
 
     running = True

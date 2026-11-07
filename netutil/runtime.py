@@ -5,10 +5,12 @@ import signal
 
 
 def setup_logging(level):
-    """Timestamped log lines with the thread name (reader-*, game-*, timer, ...)."""
+    """Timestamped one-line events, easy to read live on a projector:
+    '2026-11-13 10:02:48.630 INFO  GAME_START 'arena' players: alice@192.168.1.23:51234, ...'.
+    (metrics/run_benchmark.py parses the first 23 characters: keep the timestamp format.)"""
     logging.basicConfig(
         level=level.upper(),
-        format="%(asctime)s.%(msecs)03d %(levelname)-5s [%(threadName)s] %(message)s",
+        format="%(asctime)s.%(msecs)03d %(levelname)-5s %(message)s",
         datefmt="%Y-%m-%d %H:%M:%S",
     )
 
