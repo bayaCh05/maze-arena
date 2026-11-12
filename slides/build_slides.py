@@ -1,19 +1,22 @@
-"""Build the 7-slide demo deck slides/maze_arena_tcp_vs_udp.pptx.
+"""Build the demo deck slides/maze_arena_tcp_vs_udp.pptx (20-minute talk with a live demo).
 
 Every number on the slides is read from metrics/results.csv (and metrics/rtt_paths.csv
 when it exists), so after new measurements just run:
 
-    .venv/bin/python slides/build_slides.py
+    .venv/bin/python slides/build_slides.py --team "Name 1,Name 2,Name 3,Name 4"
 
+Speaking order: Presenter 1 = the game and the design, Presenter 2 = TCP and UDP,
+Presenter 3 = runs the live demo (server laptop), Presenter 4 = results and conclusion.
+In the demo, Presenter 1 plays alice, Presenter 2 bob, Presenter 4 carol.
 A value that was never measured is shown as "measured live in the demo", never guessed.
-The charts are native PowerPoint charts drawn from the same rows as metrics/charts/*.png,
-in the same colors (TCP blue, UDP orange, see metrics/make_charts.py).
-Team names: `--team "Name 1,Name 2,Name 3,Name 4"` (speaking order: slide 1, slides 2-3,
-slides 4-5, slides 6-7), or edit TEAM below. Edit BONUS_STATUS after the remote tests.
+Charts are native PowerPoint charts, TCP blue and UDP orange as in metrics/charts/*.png.
+Also writes docs/presentation_script.md (speaker notes + timings).
+Edit BONUS_STATUS after the remote tests.
 """
 
 import argparse
 import csv
+import re
 import sys
 from pathlib import Path
 
@@ -30,14 +33,14 @@ from pptx.util import Emu, Inches, Pt
 ROOT = Path(__file__).resolve().parent.parent
 RESULTS = ROOT / "metrics" / "results.csv"
 RTT_PATHS = ROOT / "metrics" / "rtt_paths.csv"
-CHARTS = ROOT / "metrics" / "charts"
+GAME_PNG = ROOT / "slides" / "img" / "game.png"
 OUT = ROOT / "slides" / "maze_arena_tcp_vs_udp.pptx"
 SCRIPT = ROOT / "docs" / "presentation_script.md"
 WPM = 140  # calm speaking speed, words per minute
 
 TEAM = ["[Name 1]", "[Name 2]", "[Name 3]", "[Name 4]"]
 BONUS_STATUS = {
-    "tcp": "TCP: full games through the Cloudflare tunnel, tested from the server Mac; a remote player is shown live",
+    "tcp": "TCP: full games through the Cloudflare tunnel, tested from the server Mac",
     "udp": "UDP: playit agent ready, UDP tunnel not set up yet",
 }
 LIVE = "measured live in the demo"
@@ -56,22 +59,24 @@ WHITE = RGBColor(0xFF, 0xFF, 0xFF)
 NIGHT = RGBColor(0x10, 0x16, 0x2B)
 NIGHT_2 = RGBColor(0x1D, 0x26, 0x44)
 NIGHT_TEXT = RGBColor(0xB8, 0xC0, 0xD8)
+GOLD = RGBColor(0xFF, 0xC5, 0x3D)       # live demo
 LOST = RGBColor(0xB4, 0x23, 0x2B)
+PLAYER = {"alice": RGBColor(0xE0, 0xB0, 0x00), "bob": RGBColor(0x00, 0xA5, 0xB8),
+          "carol": RGBColor(0xC8, 0x2C, 0xB4)}   # the game's yellow / cyan / magenta, darkened for paper
 
 HEAD = "Cambria"
 BODY = "Calibri"
 MONO = "Courier New"
 W, H = Inches(13.333), Inches(7.5)
+I = Inches
+
+SECS = {}   # slide_id -> fixed duration (demo slides); others are timed from their notes
 
 
 # ---------------------------------------------------------------- data
 
 def load_results():
-    """{(proto, loss): row} for the loopback runs that finished ("ok").
-
-    TCP loss only works through the kernel (loss_method os); a later row replaces an
-    earlier one, so a re-run benchmark wins.
-    """
+    """{(proto, loss): row} for the loopback runs that finished ("ok"); a later row wins."""
     rows = {}
     if not RESULTS.exists():
         sys.exit(f"missing {RESULTS}: run metrics/run_benchmark.py first")
@@ -105,15 +110,43 @@ def ms(v, digits=0):
     if v is None:
         return "—"
     if v >= 1000:
-        return f"{v / 1000:.1f} s"
-    return f"{v:.{digits}f} ms"
+        return f"{v / 1000:.1f} s"
+    return f"{v:.{digits}f} ms"
+
+
+def span(vals, seconds=False):
+    """'0–95 ms' / '4.0–4.5 s' over the measured values, kept on one line."""
+    vals = [v for v in vals if v is not None]
+    if not vals:
+        return LIVE
+    lo, hi = min(vals), max(vals)
+    if seconds:
+        return f"{lo / 1000:.1f}⁠–⁠{hi / 1000:.1f} s"
+    return f"{lo:.0f}⁠–⁠{hi:.0f} ms"
+
+
+def who(i):
+    """Presenter i's name, or 'Presenter i' while TEAM still has placeholders."""
+    n = TEAM[i - 1] if i <= len(TEAM) else f"[Name {i}]"
+    return f"Presenter {i}" if n.startswith("[") else n
+
+
+def team_names():
+    """'A, B, C and D' for the spoken intro."""
+    return TEAM[0] if len(TEAM) == 1 else ", ".join(TEAM[:-1]) + " and " + TEAM[-1]
 
 
 # ---------------------------------------------------------------- drawing helpers
 
+def keep_together(t):
+    """No line break between a number and its unit ('30 %', '4 s', '95 ms'), or in 'press R'."""
+    t = re.sub(r"(\d) (%|s\b|ms\b|min\b)", "\\1\u00a0\\2", t)
+    return re.sub(r"(press|presses) R\b", "\\1\u00a0R", t)
+
+
 def text(slide, x, y, w, h, paras, size=20, color=INK, font=BODY, bold=False,
          align=PP_ALIGN.LEFT, anchor=MSO_ANCHOR.TOP, space_after=4, name=None):
-    """A text box. paras: list of str or list of (text, {opts}) runs."""
+    """A text box. paras: str, or list of str / list of (text, {opts}) runs."""
     box = slide.shapes.add_textbox(x, y, w, h)
     if name:
         box.name = name
@@ -135,7 +168,7 @@ def _fill(tf, paras, size, color, font, bold, align, space_after):
         runs = [(para, {})] if isinstance(para, str) else para
         for t, o in runs:
             r = p.add_run()
-            r.text = t
+            r.text = keep_together(t)
             r.font.size = Pt(o.get("size", size))
             r.font.bold = o.get("bold", bold)
             r.font.italic = o.get("italic", False)
@@ -145,12 +178,12 @@ def _fill(tf, paras, size, color, font, bold, align, space_after):
 
 def box(slide, x, y, w, h, paras="", fill=WHITE, line=None, size=18, color=INK,
         font=BODY, bold=False, align=PP_ALIGN.CENTER, anchor=MSO_ANCHOR.MIDDLE,
-        shape=MSO_SHAPE.ROUNDED_RECTANGLE, margin=0.08, line_w=1.5, name=None):
+        shape=MSO_SHAPE.ROUNDED_RECTANGLE, margin=0.08, line_w=1.5, space_after=0, name=None):
     s = slide.shapes.add_shape(shape, x, y, w, h)
     if name:
         s.name = name
     if shape == MSO_SHAPE.ROUNDED_RECTANGLE:
-        s.adjustments[0] = 0.12
+        s.adjustments[0] = 0.10
     s.shadow.inherit = False
     if fill is None:
         s.fill.background()
@@ -164,84 +197,101 @@ def box(slide, x, y, w, h, paras="", fill=WHITE, line=None, size=18, color=INK,
         s.line.width = Pt(line_w)
     tf = s.text_frame
     tf.word_wrap = True
-    m = Inches(margin)
-    tf.margin_left = tf.margin_right = m
-    tf.margin_top = tf.margin_bottom = Inches(0.03)
+    tf.margin_left = tf.margin_right = Inches(margin)
+    tf.margin_top = tf.margin_bottom = Inches(0.05)
     tf.vertical_anchor = anchor
-    _fill(tf, paras, size, color, font, bold, align, 0)
+    _fill(tf, paras, size, color, font, bold, align, space_after)
     return s
 
 
-def arrow(slide, x1, y1, x2, y2, color=MUTED, width=2.0, dash=False, head=True):
+def arrow(slide, x1, y1, x2, y2, color=MUTED, width=2.0, head=True):
     c = slide.shapes.add_connector(MSO_CONNECTOR.STRAIGHT, x1, y1, x2, y2)
     c.line.color.rgb = color
     c.line.width = Pt(width)
-    ln = c.line._get_or_add_ln()
-    if dash:
-        d = etree.SubElement(ln, qn("a:prstDash"))
-        d.set("val", "dash")
     if head:
-        t = etree.SubElement(ln, qn("a:tailEnd"))
+        t = etree.SubElement(c.line._get_or_add_ln(), qn("a:tailEnd"))
         t.set("type", "triangle")
         t.set("w", "med")
         t.set("len", "med")
     return c
 
 
+def badge(slide, x, y, label, fill, d=0.55, size=20, color=WHITE):
+    """A numbered circle: the deck's recurring marker for steps and points."""
+    return box(slide, x, y, I(d), I(d), label, fill=fill, size=size, color=color, bold=True,
+               shape=MSO_SHAPE.OVAL, margin=0)
+
+
+def points(slide, x, y, w, items, accent, gap=1.15, size=22, dark=False):
+    """Numbered statements: a badge, then a bold lead and an optional plain follow-up."""
+    for i, item in enumerate(items):
+        lead, rest = item if isinstance(item, tuple) else (item, "")
+        yy = y + I(gap * i)
+        badge(slide, x, yy, str(i + 1), accent)
+        runs = [(lead, {"bold": True})]
+        if rest:
+            runs.append((" " + rest, {"bold": False, "color": NIGHT_TEXT if dark else MUTED}))
+        text(slide, x + I(0.8), yy - I(0.02), w - I(0.8), I(gap), [runs], size=size,
+             color=WHITE if dark else INK)
+
+
 def pill(slide, x, y, label, color):
-    """The TCP / UDP tag in the top right corner: the deck's recurring motif."""
-    return box(slide, x, y, Inches(0.95), Inches(0.42), label, fill=color, size=16,
-               color=WHITE, bold=True, name=f"tag {label}")
+    return box(slide, x, y, I(0.95), I(0.42), label, fill=color, size=16, color=WHITE, bold=True,
+               name=f"tag {label}")
 
 
-def frame(prs, n, title, tags=(), dark=False, gloss=None, source=None):
-    """A slide with background, title, protocol tags, a 'words' line and a footer."""
+def frame(prs, title, kicker=None, kicker_color=MUTED, tags=(), dark=False):
+    """Background, small section label (kicker), title and the TCP / UDP tags."""
     s = prs.slides.add_slide(prs.slide_layouts[6])
     bg = s.background.fill
     bg.solid()
     bg.fore_color.rgb = NIGHT if dark else PAPER
-    fg = WHITE if dark else INK
-    sub = NIGHT_TEXT if dark else MUTED
+    if kicker:
+        text(s, I(0.6), I(0.32), I(10), I(0.35), kicker.upper(), size=14, bold=True,
+             color=kicker_color, name="kicker")
     if title:
-        text(s, Inches(0.6), Inches(0.38), Inches(10.4), Inches(0.9), title, size=34,
-             color=fg, font=HEAD, bold=True, anchor=MSO_ANCHOR.MIDDLE, name="title")
-    x = W - Inches(0.6)
+        tw = 12.1 - (1.07 * len(tags) + 0.2 if tags else 0)
+        text(s, I(0.6), I(0.62), I(tw), I(0.9), title, size=36, color=WHITE if dark else INK,
+             font=HEAD, bold=True, anchor=MSO_ANCHOR.MIDDLE, name="title")
+    x = W - I(0.6)
     for label in reversed(tags):
-        x -= Inches(0.95)
-        pill(s, x, Inches(0.6), label, TCP if label == "TCP" else UDP)
-        x -= Inches(0.12)
-    if gloss:
-        text(s, Inches(0.6), Inches(6.62), Inches(12.1), Inches(0.42),
-             [[("Words  ", {"bold": True, "color": fg}), (gloss, {})]],
-             size=14, color=sub, anchor=MSO_ANCHOR.BOTTOM, name="words")
-    foot = f"Maze Arena · TCP vs UDP · {n}/7"
-    if source:
-        foot += f"   ·   {source}"
-    text(s, Inches(0.6), Inches(7.08), Inches(12.1), Inches(0.3), foot, size=11,
-         color=sub, name="footer")
+        x -= I(0.95)
+        pill(s, x, I(0.62), label, TCP if label == "TCP" else UDP)
+        x -= I(0.12)
     return s
 
 
-def notes(slide, body, qa):
+def footers(prs):
+    """'Maze Arena · TCP vs UDP' and 'n / N' on every slide but the first."""
+    total = len(prs.slides)
+    for n, s in enumerate(prs.slides, start=1):
+        if n == 1:
+            continue
+        dark = s.background.fill.fore_color.rgb == NIGHT
+        c = NIGHT_TEXT if dark else MUTED
+        text(s, I(0.6), I(7.0), I(6), I(0.3), "Maze Arena · TCP vs UDP", size=12, color=c,
+             name="footer")
+        text(s, I(10.7), I(7.0), I(2.0), I(0.3), f"{n} / {total}", size=12, color=c,
+             align=PP_ALIGN.RIGHT, name="page")
+
+
+def notes(slide, body, qa=(), secs=None):
     body = body.strip().replace("[team]", team_names())
     for i, name in enumerate(TEAM, start=1):
         if not name.startswith("["):
             body = body.replace(f"[Presenter {i}]", f"[{name}]")
-    lines = [body, ""]
+    lines = [" ".join(body.split()), ""]
     for q, a in qa:
         lines += [f"Likely question: {q}", f"Answer: {a}", ""]
     slide.notes_slide.notes_text_frame.text = "\n".join(lines).strip()
+    if secs is not None:
+        SECS[slide.slide_id] = secs
 
 
-def team_names():
-    """'A, B, C and D' for the spoken intro."""
-    return TEAM[0] if len(TEAM) == 1 else ", ".join(TEAM[:-1]) + " and " + TEAM[-1]
-
-
-def cell(c, paras, size=16, color=INK, bold=False, fill=None, align=PP_ALIGN.LEFT):
+def cell(c, paras, size=20, color=INK, bold=False, fill=None, align=PP_ALIGN.LEFT):
     c.text_frame.word_wrap = True
-    c.margin_left = c.margin_right = Inches(0.1)
-    c.margin_top = c.margin_bottom = Inches(0.04)
+    c.margin_left = c.margin_right = Inches(0.15)
+    c.margin_top = c.margin_bottom = Inches(0.06)
     c.vertical_anchor = MSO_ANCHOR.MIDDLE
     tf = c.text_frame
     tf.paragraphs[0].text = ""
@@ -257,7 +307,6 @@ def table(slide, x, y, w, col_w, row_h, name):
     t = slide.shapes.add_table(len(row_h), len(col_w), x, y, w, sum(row_h, Emu(0)))
     t.name = name
     tbl = t.table
-    # drop the built-in banded style so only our fills show
     tbl_pr = tbl._tbl.tblPr
     tbl_pr.set("firstRow", "0")
     tbl_pr.set("bandRow", "0")
@@ -282,18 +331,18 @@ def bar_chart(slide, x, y, w, h, title, tcp_vals, udp_vals, fmt, name):
     ch = gf.chart
     ch.has_title = True
     ch.chart_title.text_frame.text = title
-    tp = ch.chart_title.text_frame.paragraphs[0]
-    tp.runs[0].font.size = Pt(18)
-    tp.runs[0].font.bold = True
-    tp.runs[0].font.name = BODY
-    tp.runs[0].font.color.rgb = INK
+    run = ch.chart_title.text_frame.paragraphs[0].runs[0]
+    run.font.size = Pt(20)
+    run.font.bold = True
+    run.font.name = BODY
+    run.font.color.rgb = INK
     ch.has_legend = True
     ch.legend.position = XL_LEGEND_POSITION.BOTTOM
     ch.legend.include_in_layout = False
-    ch.legend.font.size = Pt(14)
+    ch.legend.font.size = Pt(16)
     ch.legend.font.name = BODY
     ch.font.name = BODY
-    ch.font.size = Pt(14)
+    ch.font.size = Pt(16)
     ch.font.color.rgb = MUTED
     plot = ch.plots[0]
     plot.gap_width = 60
@@ -303,7 +352,7 @@ def bar_chart(slide, x, y, w, h, title, tcp_vals, udp_vals, fmt, name):
     dl.number_format = fmt
     dl.number_format_is_linked = False
     dl.position = XL_LABEL_POSITION.OUTSIDE_END
-    dl.font.size = Pt(14)
+    dl.font.size = Pt(16)
     dl.font.bold = True
     dl.font.color.rgb = INK
     for series, color in zip(plot.series, (TCP, UDP)):
@@ -315,523 +364,798 @@ def bar_chart(slide, x, y, w, h, title, tcp_vals, udp_vals, fmt, name):
     va.minimum_scale = 0
     ca = ch.category_axis
     ca.format.line.color.rgb = LINE
-    ca.tick_labels.font.size = Pt(14)
+    ca.tick_labels.font.size = Pt(16)
     ca.tick_labels.font.color.rgb = MUTED
     return gf
 
 
-# ---------------------------------------------------------------- slides
+def game_picture(slide, x, y, w):
+    """A real frame of the game, drawn by client_ui/render.py (slides/img/game.png)."""
+    if GAME_PNG.exists():
+        pic = slide.shapes.add_picture(str(GAME_PNG), x, y, width=w)
+        pic.name = "game screenshot"
+        return pic
+    return box(slide, x, y, w, int(w / 1.6), "game screenshot missing", fill=NIGHT_2,
+               color=WHITE)
 
-def slide_intro(prs):
-    s = frame(prs, 1, None, dark=True,
-              gloss="authoritative server = only the server changes the game  ·  "
-                    "tick = one game step (every 100 ms)  ·  STATE = full picture of the game")
-    text(s, Inches(0.6), Inches(0.7), Inches(6), Inches(1.0), "Maze Arena", size=54,
-         color=WHITE, font=HEAD, bold=True, name="title")
-    text(s, Inches(0.6), Inches(1.75), Inches(5.6), Inches(1.0),
-         "One maze game, built twice: over TCP and over UDP", size=24, color=NIGHT_TEXT)
-    text(s, Inches(0.6), Inches(3.05), Inches(5.4), Inches(2.6), [
-        "Up to 3 players race for pellets in a maze.",
-        "The server runs the game: 10 ticks per second.",
-        "Clients only send a direction.",
-        [("Rules written once in ", {}), ("common/", {"font": MONO, "bold": True}),
-         (" → the same game on both.", {})],
-    ], size=20, color=WHITE, space_after=10)
-    text(s, Inches(0.6), Inches(5.75), Inches(5.6), Inches(0.4),
-         "Team: " + " · ".join(TEAM), size=16, color=NIGHT_TEXT)
 
-    # diagram: 4 computers
-    sx, sy, sw, sh = Inches(7.0), Inches(0.75), Inches(5.6), Inches(2.0)
-    box(s, sx, sy, sw, sh, "", fill=NIGHT_2, line=NIGHT_TEXT, name="server pc")
-    text(s, sx + Inches(0.25), sy + Inches(0.12), sw - Inches(0.5), Inches(0.4),
-         [[("PC 1 · server", {"bold": True, "color": WHITE}),
-           ("   runs the game, 10 ticks/s · + 3 player PCs", {})]], size=16, color=NIGHT_TEXT)
-    box(s, sx + Inches(0.25), sy + Inches(0.62), Inches(2.4), Inches(0.5), "tcp/server.py",
-        fill=TCP, size=15, color=WHITE, bold=True, font=BODY)
-    box(s, sx + Inches(2.95), sy + Inches(0.62), Inches(2.4), Inches(0.5), "udp/server.py",
-        fill=UDP, size=15, color=WHITE, bold=True, font=BODY)
-    box(s, sx + Inches(0.25), sy + Inches(1.3), Inches(5.1), Inches(0.5),
-        [[("common/ ", {"font": MONO, "bold": True}), ("game rules + message format, shared", {})]],
-        fill=None, line=NIGHT_TEXT, size=15, color=WHITE, line_w=1)
-    cw, cy = Inches(1.65), Inches(4.35)
-    for i in range(3):
-        cx = Inches(7.0) + i * (cw + Inches(0.325))
-        box(s, cx, cy, cw, Inches(1.15),
-            [[(f"PC {i + 2}", {"bold": True})], "client"],
-            fill=NIGHT_2, line=NIGHT_TEXT, size=16, color=WHITE)
-        mid = cx + cw // 2
-        arrow(s, mid - Inches(0.25), cy, mid - Inches(0.25), sy + sh, color=WHITE, width=1.75)
-        arrow(s, mid + Inches(0.25), sy + sh, mid + Inches(0.25), cy, color=NIGHT_TEXT,
-              width=1.75)
-    text(s, Inches(7.0), Inches(5.65), Inches(5.6), Inches(0.8), [
-        [("↑ INPUT ", {"bold": True, "color": WHITE}), ("only a direction: UP, LEFT…", {})],
-        [("↓ STATE ", {"bold": True, "color": WHITE}), ("10 times per second, to everyone", {})],
-    ], size=15, color=NIGHT_TEXT, space_after=2)
+def code_panel(slide, x, y, w, h, lines, size=20):
+    """Dark panel with monospace lines; '\\n' is shown in gold."""
+    paras = []
+    for ln in lines:
+        if isinstance(ln, list):
+            paras.append(ln)
+            continue
+        runs = []
+        for k, part in enumerate(ln.split("\\n")):
+            if k:
+                runs.append(("\\n", {"color": GOLD, "bold": True}))
+            if part:
+                runs.append((part, {}))
+        paras.append(runs)
+    return box(slide, x, y, w, h, paras, fill=NIGHT, size=size, color=WHITE, font=MONO,
+               align=PP_ALIGN.LEFT, margin=0.3, space_after=6, name="code")
+
+
+# ---------------------------------------------------------------- part 1: the game
+
+def s_title(prs):
+    s = frame(prs, None, dark=True)
+    text(s, I(0.6), I(1.2), I(5.8), I(1.2), "Maze Arena", size=60, color=WHITE, font=HEAD,
+         bold=True, name="title")
+    text(s, I(0.6), I(2.45), I(5.6), I(1.3),
+         "One multiplayer game, built twice: over TCP and over UDP", size=26, color=NIGHT_TEXT)
+    text(s, I(0.6), I(4.2), I(5.6), I(0.9),
+         [[("Team  ", {"bold": True, "color": GOLD}), (" · ".join(TEAM), {})]], size=20,
+         color=WHITE)
+    text(s, I(0.6), I(5.0), I(5.6), I(0.5), "Computer Networks project · live demo on 4 laptops",
+         size=18, color=NIGHT_TEXT)
+    game_picture(s, I(6.65), I(1.3), I(6.1))
+    text(s, I(6.65), I(5.25), I(6.1), I(0.4), "A real frame of our game: alice's screen",
+         size=14, color=NIGHT_TEXT)
     notes(s, """
-[Presenter 1] Hello, we are [team]. Our project is Maze Arena, a small multiplayer maze game
-where up to three players race to eat pellets. We built the same game twice: once over TCP and
-once over UDP, so we can compare the two protocols on the same workload.
-The design is simple. One computer runs the server, three computers run a client. The server
-is authoritative: it alone moves the players and decides who scores, ten times per second.
-A client sends only a direction, and the server sends the full game state, called STATE,
-to everyone after each step. The rules live once in the common folder, and both servers use
-the same code, so any difference we measure comes from the network, not from the game.
-""", [("Why an authoritative server?",
-       "Clients cannot cheat or disagree: only the server changes the game, and every client "
-       "draws the same STATE."),
-      ("Why send the full STATE instead of changes?",
+[Presenter 1] Hello, we are [team]. This is Maze Arena: a multiplayer maze game for up to three
+players. We built the same game twice, once over TCP and once over UDP, so that we could compare
+the two protocols on exactly the same game. In the next twenty minutes we explain how both
+versions work, we show them live on four laptops, and we show what we measured.
+""")
+
+
+def s_agenda(prs):
+    s = frame(prs, "Our 20 minutes", kicker="Plan")
+    box(s, I(0.6), I(1.75), I(12.1), I(0.9),
+        [[("Our question: ", {"bold": True}),
+          ("which transport suits a real-time multiplayer game, and why?", {})]],
+        fill=WHITE, line=LINE, size=24, align=PP_ALIGN.LEFT, margin=0.3)
+    parts = [("1", "The game and our design", "3 min", who(1), None),
+             ("2", "The TCP version", "2 min", who(2), TCP),
+             ("3", "The UDP version", "3 min", who(2), UDP),
+             ("4", "Live demo on 4 laptops", "8 min", "everyone", GOLD),
+             ("5", "Results and lessons", "4 min", who(4), None)]
+    bw, gap, y = 2.3, 0.15, 3.05
+    for k, (n, label, mins, by, color) in enumerate(parts):
+        x = I(0.6 + k * (bw + gap))
+        demo = color is GOLD
+        box(s, x, I(y), I(bw), I(2.5), "", fill=NIGHT if demo else WHITE,
+            line=None if demo else LINE)
+        badge(s, x + I(0.25), I(y + 0.3), n, color or INK)
+        text(s, x + I(0.25), I(y + 1.0), I(bw - 0.45), I(0.85), label, size=21, bold=True,
+             color=WHITE if demo else INK)
+        text(s, x + I(0.25), I(y + 1.85), I(bw - 0.45), I(0.6),
+             [[(mins, {"bold": True}), ("  ·  " + by, {})]], size=16,
+             color=GOLD if demo else MUTED)
+    text(s, I(0.6), I(5.95), I(12.1), I(0.5),
+         "First how it works, then we show it live, then the numbers that explain what you saw.",
+         size=20, color=MUTED)
+    notes(s, """
+[Presenter 1] Our question is simple: which transport suits a real-time multiplayer game, and
+why? First we present the game and our design, then the TCP version and the UDP version.
+Then the most important part: a live demo on four laptops, with four short games that each
+prove something. We finish with our measurements and what we learned.
+""")
+
+
+def s_game(prs):
+    s = frame(prs, "The game in 30 seconds", kicker="Part 1 · The game")
+    game_picture(s, I(0.6), I(1.75), I(6.5))
+    rules = [("Eat a dot", "+10 points"),
+             ("Eat a power pellet (big dot)", "+50 points and 5 s of power"),
+             ("Powered? Catch a rival", "they lose 50 points and restart"),
+             ("60 seconds, up to 3 players", "the highest score wins")]
+    points(s, I(7.55), I(1.85), I(5.2), rules, INK, gap=1.0, size=21)
+    text(s, I(7.55), I(5.95), I(5.2), I(0.9),
+         "Players only use the arrow keys. Everything else is decided by the server.",
+         size=18, color=MUTED)
+    notes(s, """
+[Presenter 1] The game in thirty seconds. Each player is a Pac-Man. A small dot gives ten
+points. A big power pellet gives fifty points and five seconds of power. While you have power,
+touching another player sends them back to their start and costs them fifty points. A game lasts
+sixty seconds and the highest score wins. On the right of the screen you see the scores, and
+in the corner the network numbers we will talk about later.
+""")
+
+
+def s_arch(prs):
+    s = frame(prs, "One server, three players", kicker="Part 1 · Design")
+    box(s, I(0.6), I(1.75), I(7.4), I(1.15),
+        [[("Server laptop", {"bold": True, "size": 24})], "runs the game, 10 times per second"],
+        fill=NIGHT, color=WHITE, size=18)
+    for k, name in enumerate(("alice", "bob", "carol")):
+        x = 0.6 + k * 2.6
+        cx = x + 1.1
+        arrow(s, I(cx - 0.35), I(4.95), I(cx - 0.35), I(2.95), color=INK, width=2.5)
+        arrow(s, I(cx + 0.35), I(2.95), I(cx + 0.35), I(4.95), color=MUTED, width=2.5)
+        box(s, I(x), I(4.95), I(2.2), I(0.95),
+            [[(name, {"bold": True, "color": PLAYER[name], "size": 22})], "laptop"],
+            fill=WHITE, line=LINE, size=16, color=MUTED)
+    text(s, I(0.6), I(6.1), I(7.6), I(0.8), [
+        [("↑ INPUT  ", {"bold": True}), ("only a direction: UP, LEFT…", {})],
+        [("↓ STATE  ", {"bold": True}), ("the whole game, 10 times per second", {})]],
+        size=17, color=INK, space_after=2)
+    text(s, I(8.6), I(1.8), I(4.1), I(0.5), "The golden rule", size=22, bold=True, color=INK)
+    text(s, I(8.6), I(2.45), I(4.1), I(3.6), [
+        "Players only send a key press.",
+        "Only the server moves players and counts points.",
+        "Everyone draws the same picture: nobody can cheat.",
+    ], size=22, color=INK, space_after=18)
+    notes(s, """
+[Presenter 1] One laptop runs the server, three laptops are players. The golden rule: the
+server decides everything. A player only sends a direction, called INPUT. Ten times per second
+the server moves everybody, counts the points and sends the whole game, called STATE, to all
+players. Players only draw what they receive. So all screens show the same game, and nobody
+can cheat by changing the score on their own laptop.
+""", [("Why send the whole game instead of only the changes?",
        "If one STATE is lost, the next one is complete again, so UDP can simply skip a lost one.")])
 
 
-def slide_tcp(prs):
-    s = frame(prs, 2, "TCP version: one connection per player", tags=("TCP",),
-              gloss="socket = a program's network endpoint  ·  byte stream = bytes arrive in "
-                    "order, with no message edges  ·  thread = a task that runs alongside others")
-    # left: socket diagram
-    lx = Inches(0.6)
-    box(s, lx, Inches(1.55), Inches(2.6), Inches(0.75),
-        [[("listening socket", {"bold": True})], "port 5050"], fill=TCP, color=WHITE, size=16)
-    arrow(s, lx + Inches(2.6), Inches(1.92), lx + Inches(3.2), Inches(1.92), color=TCP)
-    box(s, lx + Inches(3.2), Inches(1.55), Inches(1.6), Inches(0.75),
-        [[("accept()", {"font": MONO, "bold": True})], "per player"],
-        fill=TCP_LIGHT, line=TCP, size=15)
-    arrow(s, lx + Inches(4.0), Inches(2.3), lx + Inches(4.0), Inches(2.65), color=TCP)
-    for i in range(3):
-        y = Inches(2.65) + i * Inches(0.72)
-        box(s, lx, y, Inches(2.1), Inches(0.58), f"connection P{i + 1}",
-            fill=WHITE, line=TCP, size=15)
-        box(s, lx + Inches(2.2), y, Inches(1.25), Inches(0.58), "reader", fill=TCP_LIGHT, size=15)
-        box(s, lx + Inches(3.55), y, Inches(1.25), Inches(0.58), "writer", fill=TCP_LIGHT, size=15)
-    text(s, lx, Inches(4.85), Inches(6.2), Inches(0.4),
-         "+ one game thread per room  ·  + a 5 s watchdog", size=16, color=MUTED)
-
-    # right: framing
-    rx, rw = Inches(6.8), Inches(5.9)
-    text(s, rx, Inches(1.55), rw, Inches(0.5),
-         [[("One recv() is not one message.", {"bold": True})]], size=22)
-    text(s, rx, Inches(2.05), rw, Inches(0.45),
-         "So each message is one JSON line ending in \\n.", size=18, color=MUTED)
-    code = box(s, rx, Inches(2.6), rw, Inches(2.15), "", fill=INK, name="framing example",
-               anchor=MSO_ANCHOR.TOP)
-    tf = code.text_frame
-    tf.margin_left = tf.margin_right = Inches(0.25)
-    tf.margin_top = Inches(0.15)
-    nl = {"color": RGBColor(0xFF, 0xC5, 0x3D), "bold": True}
-    _fill(tf, [
-        [("recv #1", {"color": NIGHT_TEXT, "font": BODY, "size": 14})],
-        [('{"type":"INPUT","dir":"UP"}', {}), ("\\n", nl), ('{"type":"PI', {})],
-        [("recv #2", {"color": NIGHT_TEXT, "font": BODY, "size": 14})],
-        [('NG","t":12.5}', {}), ("\\n", nl)],
-        [("→ cut at each \\n: INPUT, then PING", {"color": RGBColor(0x8F, 0xBA, 0xF0),
-                                                  "font": BODY, "bold": True})],
-    ], 16, WHITE, MONO, False, PP_ALIGN.LEFT, 4)
-
-    # bottom: message flow
-    steps = ["LOGIN", "LOBBY / ROOMS", "GAME_START", "INPUT ⇄ STATE", "GAME_OVER"]
-    cw, gap, y = Inches(2.35), Inches(0.08), Inches(5.45)
-    for i, st in enumerate(steps):
-        box(s, lx + i * (cw + gap), y, cw, Inches(0.7), st, fill=TCP if i == 3 else TCP_LIGHT,
-            color=WHITE if i == 3 else INK, size=14, bold=True, shape=MSO_SHAPE.CHEVRON,
-            margin=0.02)
+def s_flow(prs):
+    s = frame(prs, "A game, message by message", kicker="Part 1 · Design")
+    steps = [("LOGIN", "pick a name"), ("ROOM", "create or join"), ("READY", "everyone presses R"),
+             ("GAME_START", "maze, colors, timer"), ("INPUT ⇄ STATE", "600 times in 60 s"),
+             ("GAME_OVER", "ranking, winner")]
+    cw, y = 2.08, 1.85
+    for k, (name, sub) in enumerate(steps):
+        x = I(0.6 + k * (cw - 0.03))
+        hot = k == 4
+        box(s, x, I(y), I(cw), I(0.95), name.replace("_", "_\u200b"),
+            shape=MSO_SHAPE.PENTAGON if k == 0 else MSO_SHAPE.CHEVRON,
+            fill=NIGHT if hot else WHITE, line=None if hot else LINE, size=14, bold=True,
+            color=WHITE if hot else INK)
+        text(s, x + I(0.25), I(y + 1.1), I(cw - 0.4), I(0.6), sub, size=17, color=MUTED)
+    code_panel(s, I(0.6), I(3.75), I(12.1), I(2.1), [
+        [("Examples, one message each:", {"font": BODY, "size": 16, "color": NIGHT_TEXT})],
+        '{"type": "LOGIN", "name": "alice"}',
+        '{"type": "INPUT", "dir": "UP"}',
+        '{"type": "STATE", "tick": 231, "positions": {...}, "scores": {...}}',
+    ], size=19)
+    text(s, I(0.6), I(6.1), I(12.1), I(0.5),
+         "Every message is a small JSON object, exactly the same on TCP and on UDP.", size=20,
+         color=INK, bold=True)
     notes(s, """
-[Presenter 2] Here is the TCP version. The server opens one listening socket on port 5050.
-Each time a player connects, accept gives us a new socket just for that player, and we start
-two threads for it: a reader that receives, and a writer that sends from a queue, so one slow
-player never blocks the others. TCP is reliable and ordered, but it is a byte stream: it has no message edges. One recv can
-return half a message or three messages. So we end every JSON message with a newline and keep
-a buffer until we see one.
-The message flow is: LOGIN, then the lobby and rooms, GAME_START, then INPUT and STATE ten
-times per second, and GAME_OVER.
+[Presenter 1] This is one game, message by message. A player logs in with a name, creates or
+joins a room, and presses R when ready. When everyone is ready the server sends GAME_START with
+the maze and the colors. Then for sixty seconds the players send INPUT and the server sends
+STATE, six hundred times. At the end GAME_OVER gives the ranking. Every message is a small
+JSON object, and the messages are identical on TCP and UDP.
+""")
+
+
+def s_shared(prs):
+    s = frame(prs, "Same game, only the transport changes", kicker="Part 1 · Design")
+    box(s, I(0.6), I(1.8), I(12.1), I(1.45), [
+        [("common/", {"bold": True, "font": MONO, "size": 24}),
+         ("   written once, used by both versions", {"bold": True})],
+        "game rules  ·  lobby and rooms  ·  game loop at 10 ticks/s  ·  message format"],
+        fill=WHITE, line=INK, size=21, line_w=2)
+    for k, (name, color, line) in enumerate((
+            ("tcp/", TCP, "connections and a byte stream; 2 threads per player"),
+            ("udp/", UDP, "one socket, separate packets, our own resend layer"))):
+        x = 0.6 + k * 6.2
+        arrow(s, I(x + 2.95), I(3.25), I(x + 2.95), I(3.95), color=MUTED, width=2.5)
+        box(s, I(x), I(3.95), I(5.9), I(1.5),
+            [[(name, {"bold": True, "font": MONO, "size": 26})], line],
+            fill=color, color=WHITE, size=19)
+    text(s, I(0.6), I(5.85), I(12.1), I(0.9),
+         "So any difference we measure comes from the network, not from the game.",
+         size=24, bold=True, color=INK)
+    notes(s, """
+[Presenter 1] To compare fairly, everything that is not networking is written once, in the
+common folder: the rules, the lobby and rooms, the game loop and the message format. The TCP
+folder and the UDP folder only move bytes. One test even checks that both versions deliver
+exactly the same messages. So any difference you see today comes from the network, not from the
+game. Now [Presenter 2] presents the TCP version.
+""", [("How do you know both versions behave the same?",
+       "A parity test plays the same session on TCP and UDP and checks that the messages are "
+       "identical; 118 automated tests in total.")])
+
+
+# ---------------------------------------------------------------- part 2 and 3: TCP, UDP
+
+def s_tcp(prs):
+    s = frame(prs, "TCP: one connection per player", kicker="Part 2 · TCP", kicker_color=TCP,
+              tags=("TCP",))
+    box(s, I(0.6), I(1.8), I(3.0), I(0.95),
+        [[("listening socket", {"bold": True})], "port 5050"], fill=TCP, color=WHITE, size=18)
+    arrow(s, I(3.6), I(2.27), I(4.2), I(2.27), color=TCP, width=2.5)
+    box(s, I(4.2), I(1.8), I(2.9), I(0.95),
+        [[("accept()", {"bold": True, "font": MONO})], "a new socket per player"],
+        fill=WHITE, line=TCP, size=18)
+    for k, name in enumerate(("alice", "bob", "carol")):
+        y = I(3.15 + k * 0.85)
+        box(s, I(0.6), y, I(2.6), I(0.7), [[(name, {"bold": True, "color": PLAYER[name]}),
+                                            (" connection", {})]],
+            fill=WHITE, line=TCP, size=18)
+        box(s, I(3.35), y, I(1.8), I(0.7), "reader", fill=TCP_LIGHT, size=18)
+        box(s, I(5.3), y, I(1.8), I(0.7), "writer", fill=TCP_LIGHT, size=18)
+    text(s, I(0.6), I(5.8), I(6.5), I(0.5), "+ one game thread per room", size=18, color=MUTED)
+    points(s, I(7.75), I(1.85), I(5.0), [
+        ("Like a phone call:", "connect first, then talk."),
+        ("TCP resends lost data", "and keeps everything in order for us."),
+        ("Each player has a reader and a writer,", "so one slow player never blocks the others."),
+    ], TCP, gap=1.35, size=21)
+    notes(s, """
+[Presenter 2] TCP works like a phone call: you connect first, then you talk. The server opens a
+listening socket on port 5050. For each player, accept gives a new socket, just for that
+player, and we start two threads: a reader that receives and a writer that sends from a queue.
+So one slow player never blocks the others. TCP does a lot for us: it resends lost data and
+keeps everything in order.
 """, [("Why a writer thread and not just send()?",
        "send() can block if a client is slow; with a queue per client the game thread never waits."),
       ("Why TCP_NODELAY?",
-       "Without it TCP may hold small messages to batch them, which adds delay to our 10 STATEs per second.")])
+       "Without it TCP may hold small messages to group them, which delays our 10 STATEs per second.")])
 
 
-def slide_udp(prs):
-    s = frame(prs, 3, "UDP version: one socket, our own reliability", tags=("UDP",),
-              gloss="datagram = one UDP packet = one message  ·  seq = message number  ·  "
-                    "ACK = \"I got number 7\"")
-    lx = Inches(0.6)
-    box(s, lx, Inches(1.55), Inches(5.5), Inches(0.75),
-        [[("one socket for everyone", {"bold": True})], "port 5050, recvfrom() in one loop"],
-        fill=UDP, color=WHITE, size=16)
-    text(s, lx, Inches(2.5), Inches(5.5), Inches(0.4),
-         "the sender's (ip, port) tells us who it is:", size=16, color=MUTED)
-    tbl = table(s, lx, Inches(2.9), Inches(5.5), [Inches(3.0), Inches(2.5)],
-                [Inches(0.42)] * 4, "session map")
-    cell(tbl.cell(0, 0), "(ip, port)  — example", 15, WHITE, True, UDP)
-    cell(tbl.cell(0, 1), "session", 15, WHITE, True, UDP)
-    for i, (addr, who) in enumerate([("192.168.1.12 : 50311", "player alice"),
-                                     ("192.168.1.20 : 61002", "player bob"),
-                                     ("192.168.1.31 : 53877", "player carol")], start=1):
-        cell(tbl.cell(i, 0), addr, 15, INK, False, WHITE)
-        cell(tbl.cell(i, 1), who, 15, INK, False, WHITE)
-
-    # right: timeline, JOIN lost then resent
-    rx = Inches(6.9)
-    cx, sx = rx + Inches(0.8), rx + Inches(4.9)
-    top, bot = Inches(1.95), Inches(4.75)
-    text(s, cx - Inches(0.8), Inches(1.5), Inches(1.6), Inches(0.4), "client", size=16,
-         bold=True, align=PP_ALIGN.CENTER)
-    text(s, sx - Inches(0.8), Inches(1.5), Inches(1.6), Inches(0.4), "server", size=16,
-         bold=True, align=PP_ALIGN.CENTER)
-    arrow(s, cx, top, cx, bot, color=LINE, width=2, head=False)
-    arrow(s, sx, top, sx, bot, color=LINE, width=2, head=False)
-    # 1. JOIN lost
-    y0 = Inches(2.15)
-    arrow(s, cx, y0, cx + Inches(2.1), y0 + Inches(0.3), color=UDP, width=2.25, head=False)
-    text(s, cx + Inches(1.95), y0 + Inches(0.06), Inches(0.5), Inches(0.5), "✕", size=26,
-         color=LOST, bold=True)
-    text(s, cx + Inches(0.15), y0 - Inches(0.36), Inches(3.0), Inches(0.35),
-         "JOIN seq 7  (lost)", size=15, color=INK)
-    # 2. 200 ms later: resent, arrives
-    y1 = Inches(3.05)
-    text(s, cx - Inches(1.6), y1 - Inches(0.15), Inches(1.45), Inches(0.35), "+200 ms",
-         size=15, color=MUTED, bold=True, align=PP_ALIGN.RIGHT)
-    arrow(s, cx, y1, sx, y1 + Inches(0.5), color=UDP, width=2.25)
-    text(s, cx + Inches(0.15), y1 - Inches(0.36), Inches(3.6), Inches(0.35),
-         "JOIN seq 7  (sent again)", size=15)
-    # 3. ACK
-    y2 = Inches(3.95)
-    arrow(s, sx, y2, cx, y2 + Inches(0.5), color=UDP, width=2.25)
-    text(s, cx + Inches(1.6), y2 - Inches(0.1), Inches(2.2), Inches(0.35), "ACK 7",
-         size=15, bold=True)
-    text(s, sx + Inches(0.12), y1 + Inches(0.35), Inches(1.0), Inches(0.9),
-         "if a copy arrives twice, seq 7 drops it", size=12, color=MUTED)
-
-    # bottom: the two message classes
-    by, bh = Inches(5.0), Inches(1.45)
-    box(s, lx, by, Inches(6.0), bh, [
-        [("Reliable: ", {"bold": True, "color": UDP}),
-         ("seq + ACK, resent every 200 ms, in order, no duplicates", {})],
-        [("LOGIN · JOIN · READY · GAME_START · GAME_OVER · PLAYER_LEFT",
-          {"font": MONO, "size": 13, "color": MUTED})],
-    ], fill=WHITE, line=UDP, size=17, align=PP_ALIGN.LEFT, margin=0.2)
-    box(s, Inches(6.8), by, Inches(5.9), bh, [
-        [("Unreliable on purpose: ", {"bold": True, "color": UDP}),
-         ("a lost STATE is replaced 100 ms later; older ticks are dropped", {})],
-        [("STATE · INPUT · PING", {"font": MONO, "size": 13, "color": MUTED})],
-    ], fill=WHITE, line=UDP, size=17, align=PP_ALIGN.LEFT, margin=0.2)
+def s_stream(prs):
+    s = frame(prs, "TCP delivers bytes, not messages", kicker="Part 2 · TCP", kicker_color=TCP,
+              tags=("TCP",))
+    code_panel(s, I(0.6), I(1.8), I(6.9), I(3.6), [
+        [("What one recv() can return:", {"font": BODY, "size": 17, "color": NIGHT_TEXT})],
+        [("recv #1", {"font": BODY, "size": 15, "color": NIGHT_TEXT})],
+        '{"type":"INPUT","dir":"UP"}\\n{"type":"PI',
+        [("recv #2", {"font": BODY, "size": 15, "color": NIGHT_TEXT})],
+        'NG","t":12.5}\\n',
+        [("→ cut at each \\n:  INPUT, then PING", {"font": BODY, "bold": True, "color": GOLD})],
+    ], size=20)
+    text(s, I(8.0), I(1.8), I(4.7), I(4.6), [
+        [("The problem", {"bold": True, "color": TCP})],
+        "One recv() can give half a message, or three messages at once.",
+        [("Our fix", {"bold": True, "color": TCP})],
+        "One JSON message per line, ending in \\n. We keep a buffer and cut at each \\n.",
+        [("Tested", {"bold": True, "color": TCP})],
+        "split messages, merged messages, one byte at a time.",
+    ], size=21, space_after=8)
     notes(s, """
-[Presenter 2] Now UDP. There is no connection: the server has one socket for all players and
-reads it in one loop. Each datagram comes with the sender's IP and port, so we
-keep a map from (ip, port) to the player's session.
-One datagram is one message, but UDP may lose, duplicate or reorder it.
-Important ones, like JOIN or GAME_OVER, get
-a sequence number; the receiver answers with an ACK, and the sender resends every 200
-milliseconds until it gets it, up to 15 times. Look at the timeline: the first JOIN is lost,
-it is sent again 200 milliseconds later, and the ACK comes back. Duplicates are dropped by seq. STATE, INPUT and PING are never resent: a new STATE comes
-100 milliseconds later anyway, and old ticks are thrown away.
+[Presenter 2] The tricky part of TCP: it delivers a stream of bytes, not messages. One recv can
+return half a message, or three messages glued together. Here the first recv ends in the middle
+of the word PING. Our fix: every message is one line of JSON ending with a newline. We keep a
+buffer and only cut at newlines. We tested messages split in two, merged, and even one byte at
+a time.
+""")
+
+
+def s_udp(prs):
+    s = frame(prs, "UDP: one socket for everyone", kicker="Part 3 · UDP", kicker_color=UDP,
+              tags=("UDP",))
+    box(s, I(0.6), I(1.8), I(5.9), I(0.95),
+        [[("one socket", {"bold": True}), ("  ·  port 5050", {})],
+         "reads every packet in one loop"], fill=UDP, color=WHITE, size=18)
+    tbl = table(s, I(0.6), I(3.0), I(5.9), [I(3.3), I(2.6)], [I(0.55)] * 4, "who is it")
+    cell(tbl.cell(0, 0), "sender's address", 18, WHITE, True, UDP)
+    cell(tbl.cell(0, 1), "player", 18, WHITE, True, UDP)
+    for k, (addr, name) in enumerate((("192.168.1.12 : 50311", "alice"),
+                                      ("192.168.1.20 : 61002", "bob"),
+                                      ("192.168.1.31 : 53877", "carol")), start=1):
+        cell(tbl.cell(k, 0), addr, 18, INK, False, WHITE)
+        cell(tbl.cell(k, 1), [[(name, {"bold": True, "color": PLAYER[name]})]], 18, INK, False,
+             WHITE)
+    text(s, I(0.6), I(5.4), I(5.9), I(0.5), "The address on each packet tells us who sent it.",
+         size=18, color=MUTED)
+    points(s, I(7.2), I(1.85), I(5.5), [
+        ("Like postcards:", "no connection, each packet travels alone."),
+        ("One packet = one message,", "so no cutting is needed."),
+        ("But packets can be lost,", "arrive twice, or arrive out of order."),
+    ], UDP, gap=1.35, size=21)
+    notes(s, """
+[Presenter 2] UDP works like sending postcards: there is no connection, every packet travels
+alone. The server has one single socket for all players and reads it in one loop. Each packet
+carries the sender's address, so we keep a table from address to player. One packet is one
+message, so no cutting is needed. But nothing is guaranteed: a packet can be lost, arrive twice,
+or arrive out of order. That is our job now.
+""")
+
+
+def s_reliable(prs):
+    s = frame(prs, "Lost packets: we built our own safety net", kicker="Part 3 · UDP",
+              kicker_color=UDP, tags=("UDP",))
+    cx, sx = 1.6, 6.0
+    text(s, I(cx - 0.8), I(1.75), I(1.6), I(0.4), "player", size=18, bold=True,
+         align=PP_ALIGN.CENTER)
+    text(s, I(sx - 0.8), I(1.75), I(1.6), I(0.4), "server", size=18, bold=True,
+         align=PP_ALIGN.CENTER)
+    arrow(s, I(cx), I(2.2), I(cx), I(5.6), color=LINE, width=2, head=False)
+    arrow(s, I(sx), I(2.2), I(sx), I(5.6), color=LINE, width=2, head=False)
+    arrow(s, I(cx), I(2.75), I(cx + 2.4), I(3.05), color=UDP, width=2.5, head=False)
+    text(s, I(cx + 2.3), I(2.72), I(0.5), I(0.5), "✕", size=28, color=LOST, bold=True)
+    text(s, I(cx + 0.15), I(2.3), I(4), I(0.4), "JOIN #7   lost", size=18)
+    text(s, I(0.2), I(3.7), I(1.25), I(0.4), "+200 ms", size=17, bold=True, color=MUTED,
+         align=PP_ALIGN.RIGHT)
+    arrow(s, I(cx), I(3.85), I(sx), I(4.35), color=UDP, width=2.5)
+    text(s, I(cx + 0.15), I(3.4), I(4), I(0.4), "JOIN #7   sent again", size=18)
+    arrow(s, I(sx), I(4.85), I(cx), I(5.35), color=UDP, width=2.5)
+    text(s, I(cx + 1.5), I(4.6), I(2.5), I(0.4), "ACK 7 = got it", size=18, bold=True)
+    points(s, I(7.0), I(1.85), I(5.7), [
+        ("Number", "each important message (#7)."),
+        ("The receiver answers", "ACK 7."),
+        ("No ACK after 200 ms?", "Send it again, up to 15 times."),
+        ("Arrived twice?", "The copy is ignored. Order is kept."),
+    ], UDP, gap=1.05, size=20)
+    text(s, I(0.6), I(6.05), I(12.1), I(0.5),
+         "Tested at 30 % loss: every important message arrived exactly once, in order.",
+         size=18, color=MUTED)
+    notes(s, """
+[Presenter 2] So we built our own safety net. Every important message gets a number, here
+JOIN number 7. The receiver answers ACK 7: got it. If no ACK comes back within 200
+milliseconds, the sender sends it again, up to fifteen times. If a copy arrives twice, the
+receiver sees the same number and ignores it, and messages are delivered in order. Our tests
+at 30 percent loss check that every important message arrives exactly once and in order.
 """, [("What if the ACK is lost instead?",
-       "The sender resends; the receiver sees seq 7 again, drops the duplicate, and ACKs again."),
+       "The sender resends; the receiver sees #7 again, ignores the copy and ACKs again."),
       ("What if all 15 resends fail?",
-       "The message is given up and the 4 s heartbeat removes that player. In our 30 % loss test, 0 messages were given up.")])
+       "The message is given up and the 4 s heartbeat removes that player. At 30 % loss, 0 were "
+       "given up.")])
 
 
-def slide_players(prs, rows):
-    tcp_d = [num(rows, "tcp", l, "detect_ms") for l in LOSSES]
-    udp_d = [num(rows, "udp", l, "detect_ms") for l in LOSSES]
+def s_split(prs):
+    s = frame(prs, "Not every message has to arrive", kicker="Part 3 · UDP", kicker_color=UDP,
+              tags=("UDP",))
+    cards = [("Must arrive → sent reliably",
+              ["LOGIN, rooms, READY", "GAME_START, GAME_OVER", "PLAYER_LEFT"],
+              "Missing one would break the game."),
+             ("Can be skipped → sent once",
+              ["STATE: the picture, 10× per second", "INPUT: your direction", "PING: are you there?"],
+              "A new STATE comes 100 ms later. Resending an old one only adds delay.")]
+    for k, (head, items, foot) in enumerate(cards):
+        x = I(0.6 + k * 6.2)
+        box(s, x, I(1.8), I(5.9), I(3.85), "", fill=WHITE if k == 0 else UDP_LIGHT, line=UDP,
+            line_w=2)
+        text(s, x + I(0.35), I(2.0), I(5.3), I(0.5), head, size=24, bold=True, color=UDP)
+        text(s, x + I(0.35), I(2.75), I(5.3), I(1.8), items, size=21, color=INK, space_after=8)
+        text(s, x + I(0.35), I(4.55), I(5.3), I(1.0), foot, size=18, color=MUTED)
+    text(s, I(0.6), I(5.95), I(12.1), I(0.6),
+         "This is the key difference with TCP, which resends everything.", size=22, bold=True)
+    notes(s, """
+[Presenter 2] The key idea of our UDP version: not every message has to arrive. Lobby messages
+and game events must arrive, so they use our safety net. But STATE, the picture of the game, is
+sent ten times per second. If one is lost, the next one arrives 100 milliseconds later and is
+complete. Resending the old one would only add delay. So STATE, INPUT and PING are sent once
+and never resent. TCP cannot make this choice: it resends everything.
+""")
 
-    def span(vals, unit_s=False):
-        vals = [v for v in vals if v is not None]
-        if not vals:
-            return LIVE
-        lo, hi = min(vals), max(vals)
-        if unit_s:
-            return f"{lo / 1000:.1f}\u2060–\u2060{hi / 1000:.1f}\u00a0s"
-        return f"{lo:.0f}\u2060–\u2060{hi:.0f}\u00a0ms"
 
-    s = frame(prs, 4, "Many players at once, and players who vanish", tags=("TCP", "UDP"),
-              gloss="lock = only one thread at a time may change the game  ·  heartbeat = an "
-                    "\"I'm alive\" PING every second",
-              source="times: a bot killed mid-game, loopback, 0/10/30 % loss (metrics/results.csv)")
-    rh = [Inches(0.55), Inches(0.82), Inches(0.62), Inches(0.82), Inches(0.82), Inches(0.62)]
-    tbl = table(s, Inches(0.6), Inches(1.5), Inches(12.1),
-                [Inches(2.7), Inches(4.7), Inches(4.7)], rh, "players and disconnections")
-    cell(tbl.cell(0, 0), "", 18, INK, True, None)
-    cell(tbl.cell(0, 1), "TCP", 20, WHITE, True, TCP, PP_ALIGN.CENTER)
-    cell(tbl.cell(0, 2), "UDP", 20, WHITE, True, UDP, PP_ALIGN.CENTER)
+def s_vanish(prs, rows):
+    tcp_d = span([num(rows, "tcp", l, "detect_ms") for l in LOSSES])
+    udp_d = span([num(rows, "udp", l, "detect_ms") for l in LOSSES], seconds=True)
+    s = frame(prs, "When a player disappears", kicker="Part 3 · TCP vs UDP", tags=("TCP", "UDP"))
+    rh = [I(0.6), I(1.15), I(1.15), I(0.85)]
+    tbl = table(s, I(0.6), I(1.8), I(12.1), [I(2.9), I(4.6), I(4.6)], rh, "disconnections")
+    cell(tbl.cell(0, 0), "", 20, INK, True, None)
+    cell(tbl.cell(0, 1), "TCP", 22, WHITE, True, TCP, PP_ALIGN.CENTER)
+    cell(tbl.cell(0, 2), "UDP", 22, WHITE, True, UDP, PP_ALIGN.CENTER)
     body = [
-        ("Threads", "1 accept loop + a reader and a writer per player + a game thread per room",
-         "1 receive loop for everyone + a timer thread (resends, timeouts) + the game thread"),
-        ("Shared game", "one lock around the game state: one thread changes it at a time", None),
-        ("Client crashes", [[("the OS closes the connection → seen in ", {}),
-                             (span(tcp_d), {"bold": True})]],
-         [[("no signal at all → 4 s heartbeat → ", {}), (span(udp_d, True), {"bold": True})]]),
-        ("Frozen PC / Wi-Fi off", "no packet at all → the 5 s watchdog drops it",
-         "same 4 s heartbeat"),
-        ("Mid-game", "the others get PLAYER_LEFT · the game goes on · it ends with 1 player left",
-         None),
+        ("The program crashes",
+         [[("Its OS closes the connection → noticed in ", {}), (tcp_d, {"bold": True})]],
+         [[("Nothing is sent → noticed after 4 s of silence: ", {}), (udp_d, {"bold": True})]]),
+        ("Wi-Fi off or frozen laptop",
+         "Nothing arrives → our heartbeat drops the player after 5 s",
+         "Same: 4 s of silence"),
+        ("Then", "the others see “carol left”, the game goes on", None),
     ]
-    for i, (label, t, u) in enumerate(body, start=1):
-        cell(tbl.cell(i, 0), label, 18, INK, True, WHITE)
-        cell(tbl.cell(i, 1), t, 17, INK, False, TCP_LIGHT if u else WHITE)
+    for k, (label, t, u) in enumerate(body, start=1):
+        cell(tbl.cell(k, 0), label, 20, INK, True, WHITE)
+        cell(tbl.cell(k, 1), t, 20, INK, False, TCP_LIGHT if u else WHITE,
+             PP_ALIGN.LEFT if u else PP_ALIGN.CENTER)
         if u is None:
-            tbl.cell(i, 1).merge(tbl.cell(i, 2))
-            cell(tbl.cell(i, 1), t, 17, INK, False, WHITE, PP_ALIGN.CENTER)
+            tbl.cell(k, 1).merge(tbl.cell(k, 2))
         else:
-            cell(tbl.cell(i, 2), u, 17, INK, False, UDP_LIGHT)
-    box(s, Inches(0.6), Inches(5.95), Inches(12.1), Inches(0.55), [[
-        ("Chaos test, both servers: ", {"bold": True}),
-        ("kill -9 a client, send garbage, break the lobby rules → the server never crashed.", {}),
-    ]], fill=WHITE, line=LINE, size=17, line_w=1)
+            cell(tbl.cell(k, 2), u, 20, INK, False, UDP_LIGHT)
+    text(s, I(0.6), I(5.85), I(12.1), I(0.9), [
+        [("Heartbeat: ", {"bold": True}), ("every player sends a PING each second. ", {}),
+         ("No message for 5 s (TCP) or 4 s (UDP) = gone.", {})]], size=19, color=MUTED)
     notes(s, f"""
-[Presenter 3] How do we handle several players at the same time? TCP gives each player a
-reader and a writer thread; UDP has one receive loop and a timer thread. In both, the game state is protected by one lock.
-
-Now disconnections. With TCP, if a client program crashes, its operating system closes the
-connection, and we saw it in {span(tcp_d)}. But if the Wi-Fi goes off, nothing is sent at
-all, so TCP alone would wait for minutes: our watchdog drops a silent player after 5 seconds.
-UDP has no connection, so silence is the only signal: after 4 seconds without a datagram the
-player is removed; we measured {span(udp_d, True)}. Either way the others get PLAYER_LEFT and keep
-playing, and if only one player is left, the game ends. Our chaos test never crashed either server.
+[Presenter 2] Last design question: what if a player disappears? If the game program crashes on
+a TCP laptop, its operating system closes the connection for it, so the server knows almost
+immediately: we measured {tcp_d}. With UDP there is no connection to close, so the only signal
+is silence: after 4 seconds without any packet, the player is removed. If the Wi-Fi goes off,
+even TCP gets nothing, so we added a heartbeat: every player sends a PING each second. In every
+case the others see that the player left, and the game goes on. Now [Presenter 3] shows all of
+this live.
 """, [("Why not a shorter UDP timeout?",
-       "Under 30 % loss several PINGs in a row can be lost; 4 s avoids kicking players who are still there."),
-      ("Can two threads move a player at the same time?",
-       "No. Every change to the game goes through the same lock.")])
+       "At 30 % loss several PINGs in a row can be lost; 4 s avoids kicking players who are still "
+       "there.")])
 
 
-def slide_metrics(prs, rows, paths):
-    s = frame(prs, 5, "Our measurements: TCP waits, UDP skips", tags=("TCP", "UDP"),
-              gloss="RTT = time for a PING to go and come back  ·  freeze = over 250 ms "
-                    "without a new STATE  ·  loss = share of packets dropped on purpose")
-    cw, ch, gap = Inches(3.9), Inches(3.05), Inches(0.2)
-    specs = [
-        ("Round-trip time (ms, mean)", "rtt_mean_ms", '0.0;;0'),
-        ("STATEs lost (%)", "states_missing_pct", '0.0;;0'),
-        ("Freezes > 250 ms per game", "freezes_over_250ms", '0'),
-    ]
-    missing = False
-    for i, (title, field, fmt) in enumerate(specs):
-        tv = [num(rows, "tcp", l, field) for l in LOSSES]
-        uv = [num(rows, "udp", l, field) for l in LOSSES]
-        missing |= None in tv + uv
-        bar_chart(s, Inches(0.6) + i * (cw + gap), Inches(1.35), cw, ch, title, tv, uv, fmt,
-                  f"chart {field}")
-    # table: what does not fit a chart
-    tbl = table(s, Inches(0.6), Inches(4.5), Inches(12.1),
-                [Inches(3.1)] + [Inches(1.5)] * 6, [Inches(0.42)] * 3, "resends and detection")
-    cell(tbl.cell(0, 0), "loss →", 15, MUTED, True, None)
-    for j, (p, l) in enumerate([(p, l) for p in ("tcp", "udp") for l in LOSSES], start=1):
-        cell(tbl.cell(0, j), f"{p.upper()} {l} %", 15, WHITE, True, TCP if p == "tcp" else UDP,
-             PP_ALIGN.CENTER)
-    cell(tbl.cell(1, 0), "Messages resent", 15, INK, True, WHITE)
-    cell(tbl.cell(2, 0), "Killed client detected after", 15, INK, True, WHITE)
-    for j, (p, l) in enumerate([(p, l) for p in ("tcp", "udp") for l in LOSSES], start=1):
-        if p == "tcp":
-            resent = "by the OS" if (p, l) in rows else "—"
-        else:
-            c = num(rows, p, l, "client_retransmissions")
-            sv = num(rows, p, l, "server_retransmissions")
-            resent = "—" if c is None or sv is None else f"{c + sv:.0f}"
-        d = num(rows, p, l, "detect_ms")
-        cell(tbl.cell(1, j), resent, 15, INK, False, WHITE, PP_ALIGN.CENTER)
-        cell(tbl.cell(2, j), ms(d), 15, INK, False, WHITE, PP_ALIGN.CENTER)
-    missing |= any((p, l) not in rows for p in ("tcp", "udp") for l in LOSSES)
+# ---------------------------------------------------------------- part 4: live demo
 
-    t30, u30 = num(rows, "tcp", 30, "rtt_mean_ms"), num(rows, "udp", 30, "rtt_mean_ms")
-    tm, um = num(rows, "tcp", 30, "states_missing_pct"), num(rows, "udp", 30, "states_missing_pct")
-    if None in (t30, u30, tm, um):
-        take = f"Takeaway at 30 % loss: {LIVE}."
-    else:
-        take = (f"At 30 % loss: TCP loses {tm:.0f} % of STATEs but its RTT grows to {t30:.0f} ms; "
-                f"UDP stays at {u30:.1f} ms and skips {um:.0f} %.")
-    text(s, Inches(0.6), Inches(5.9), Inches(12.1), Inches(0.4), [[(take, {"bold": True})]],
-         size=19)
-    where = "loopback (one Mac), 3 bots, 120 s games · TCP loss: kernel · UDP loss: our --drop"
-    lan = paths.get("lan", {}).get("tcp") or paths.get("lan", {}).get("udp")
-    net = paths.get("cloudflare", {}).get("tcp")
-    extra = (f"LAN RTT {ms(lan, 1)}" if lan else f"LAN: {LIVE}") + " · " + \
-            (f"internet (Cloudflare) RTT {ms(net, 1)}" if net else f"internet: {LIVE}")
-    text(s, Inches(0.6), Inches(6.28), Inches(12.1), Inches(0.35),
-         [[("Network: ", {"bold": True}), (f"{where} · {extra}", {})]], size=13, color=MUTED)
-    if missing:
-        text(s, Inches(0.6), Inches(1.0), Inches(9), Inches(0.3),
-             f"empty bars / — : {LIVE}", size=12, color=LOST)
+DEMO_ROLES = None   # filled in build(): who plays which laptop
 
-    r = lambda p, l, f, d=0: ms(num(rows, p, l, f), d)
+
+def s_demo_plan(prs):
+    s = frame(prs, "Live demo: 4 games on 4 laptops", kicker="Part 4 · Live demo",
+              kicker_color=GOLD, dark=True)
+    games = [("GAME 1", "TCP", "Normal game, then a crash", "crash noticed at once"),
+             ("GAME 2", "UDP", "Normal game, then a crash", "crash noticed after 4 s"),
+             ("GAME 3", "UDP", "30 % of packets thrown away", "the game keeps going"),
+             ("GAME 4", "TCP", "Wi-Fi off in the middle", "player dropped after 5 s")]
+    cw, gap = 2.9, 0.17
+    for k, (g, proto, title, result) in enumerate(games):
+        x = I(0.6 + k * (cw + gap))
+        color = TCP if proto == "TCP" else UDP
+        box(s, x, I(1.8), I(cw), I(2.95), "", fill=NIGHT_2, line=color, line_w=2)
+        text(s, x + I(0.25), I(2.0), I(1.5), I(0.4), g, size=16, bold=True, color=GOLD)
+        pill(s, x + I(cw - 1.2), I(1.97), proto, color)
+        text(s, x + I(0.25), I(2.6), I(cw - 0.5), I(1.2), title, size=22, bold=True, color=WHITE)
+        text(s, x + I(0.25), I(3.85), I(cw - 0.5), I(0.8), result, size=18, color=NIGHT_TEXT)
+    text(s, I(0.6), I(5.05), I(12.1), I(1.0), [
+        [("Server laptop: ", {"bold": True, "color": GOLD}), (who(3) + ", its log on the projector", {})],
+        [("Players: ", {"bold": True, "color": GOLD}),
+         (f"alice = {who(1)}  ·  bob = {who(2)}  ·  carol = {who(4)}", {})],
+    ], size=20, color=WHITE, space_after=6)
+    text(s, I(0.6), I(6.2), I(12.1), I(0.5),
+         "If we have time: TCP with 30 % loss, and a player on another network.", size=18,
+         color=NIGHT_TEXT)
+    notes(s, """
+[Presenter 3] Now the live demo. We play four short games, and each one proves something.
+Games 1 and 2: a normal game on TCP and on UDP, and in each one we crash a player on purpose.
+Game 3: UDP with 30 percent of the packets thrown away. Game 4: a player's Wi-Fi goes off.
+I run the server; its log is on the projector so you can see every event with its time.
+""", secs=40)
+
+
+def demo_slide(prs, n, proto, title, do, watch, proves, command, note, secs):
+    color = TCP if proto == "TCP" else UDP
+    s = frame(prs, title, kicker=f"Live demo · Game {n}", kicker_color=GOLD, tags=(proto,),
+              dark=True)
+    cols = [("We do", do, True), ("Watch for", watch, False), ("This proves", proves, False)]
+    cw, gap = 3.85, 0.27
+    for k, (head, items, numbered) in enumerate(cols):
+        x = I(0.6 + k * (cw + gap))
+        box(s, x, I(1.8), I(cw), I(4.25), "", fill=NIGHT_2,
+            line=GOLD if k == 2 else None, line_w=2)
+        text(s, x + I(0.3), I(1.98), I(cw - 0.6), I(0.5), head, size=22, bold=True,
+             color=GOLD if k == 2 else color if k == 0 else WHITE)
+        paras = [[(f"{i + 1}.  " if numbered else "• ", {"bold": True, "color": GOLD}),
+                  (t, {})] for i, t in enumerate(items)]
+        text(s, x + I(0.3), I(2.6), I(cw - 0.6), I(3.35), paras, size=19, color=WHITE,
+             space_after=10)
+    text(s, I(0.6), I(6.25), I(12.1), I(0.55), command, size=13, color=NIGHT_TEXT, font=MONO)
+    notes(s, note, secs=secs)
+    return s
+
+
+def s_demos(prs):
+    demo_slide(
+        prs, 1, "TCP", "TCP: a normal game, then a crash",
+        ["Start the TCP server", "bob first tries the name “alice” → refused",
+         "All three join room demo and press R", "At 0:40 left, carol's game is killed"],
+        ["Same maze and scores on 3 screens", "RTT in the corner: a few ms",
+         "Server log: 3 different IP addresses", "“carol left” in the same second"],
+        ["Login, rooms and the 10 ticks/s game work over TCP",
+         "A crash is seen at once: carol's OS closes the connection (FIN)"],
+        "server: python -m tcp.server · players: python -m client_ui.ui --proto tcp "
+        "--host S_IP --name alice --room demo · crash: pkill -9 -f client_ui.ui",
+        """[Presenter 3] Game 1, TCP. I start the TCP server. bob first tries to log in as alice:
+        refused, the name is taken. Then the three players join room demo and press R. Look at
+        the log: three connections from three different addresses. Watch the RTT in the corner of
+        each screen. At forty seconds left, carol's game is killed, with no goodbye. The log shows
+        carol left in the same second, because carol's operating system closes the TCP connection.
+        alice and bob keep playing to the end and get the same ranking.""", 120)
+    demo_slide(
+        prs, 2, "UDP", "UDP: the same game, then a crash",
+        ["Start the UDP server", "The same three players join and press R",
+         "At 0:40 left, carol's game is killed"],
+        ["Server log: “NEW PEER”, not “CONNECT”", "Corner: lost 0 % of updates",
+         "“carol left” only after about 4 s"],
+        ["The same game works over UDP", "UDP has nothing to close: silence is the only signal"],
+        "server: python -m udp.server · players: python -m client_ui.ui --proto udp "
+        "--host S_IP --name alice --room demo",
+        """[Presenter 3] Game 2, the same game over UDP. The log now says NEW PEER instead of
+        CONNECT: there is no connection, the server just sees packets from a new address. The
+        corner shows lost zero percent of updates on our network. At forty seconds left we kill
+        carol again. This time nothing happens at first: carol's laptop has nothing to close. Count
+        with me: after about four seconds of silence the server removes carol.""", 100)
+    demo_slide(
+        prs, 3, "UDP", "UDP with 30 % packet loss",
+        ["Restart server and players with --drop 0.3",
+         "Each side throws away 30 % of what it sends", "Log in, join, press R, play"],
+        ["Login and rooms still work", "Corner: lost about 30 % of updates",
+         "Moves are jumpier, but never stop", "After: the log shows resends, 0 given up"],
+        ["Our safety net saves the important messages",
+         "Skipping old STATEs keeps the game live"],
+        "server: python -m udp.server --drop 0.3 · players: python -m client_ui.ui --proto udp "
+        "--host S_IP --drop 0.3 --name alice --room demo",
+        """[Presenter 3] Game 3: we now throw away thirty percent of all packets on purpose, on the
+        server and on every player. Login, joining the room and ready still work: these messages
+        use our safety net and are resent. In the corner you see about thirty percent of updates
+        lost. The players jump a bit, but the game never stops, because we never wait for an old
+        picture. When the game ends I stop the server: its statistics show the resends, and zero
+        messages given up.""", 110)
+    demo_slide(
+        prs, 4, "TCP", "TCP: Wi-Fi off in the middle of a game",
+        ["Back to TCP, all three press R", "At 0:40 left, bob's laptop turns Wi-Fi off",
+         "bob's game stays open"],
+        ["bob stops moving on the other screens", "After about 5 s: “bob left”",
+         "bob's window: “server silent”", "alice and carol keep playing"],
+        ["With no network there is no FIN: TCP alone would wait for minutes",
+         "Our heartbeat (a PING every second) catches it in 5 s"],
+        "server: python -m tcp.server · players: python -m client_ui.ui --proto tcp "
+        "--host S_IP --name bob --room demo · Wi-Fi off from the menu bar",
+        """[Presenter 3] Game 4, back to TCP. At forty seconds left, bob turns the Wi-Fi off but
+        keeps the game open. Now there is no crash, so no operating system closes anything: TCP
+        alone would wait for minutes. On the other screens bob stops moving, and about five
+        seconds later the server says bob left, thanks to our heartbeat. bob's own window says the
+        server is silent. The game goes on for alice and carol.""", 100)
+    s = frame(prs, "If we have time", kicker="Live demo · Extra", kicker_color=GOLD, dark=True)
+    extras = [("TCP with 30 % loss", TCP,
+               "The server Mac drops 30 % of packets in the kernel (needs sudo).",
+               "Watch: the game freezes, then jumps. One lost packet holds back everything behind "
+               "it: head-of-line blocking."),
+              ("A player on another network", GOLD,
+               "One player on a phone hotspot joins through the Cloudflare tunnel.",
+               "Watch: a different public IP (curl -4 ifconfig.me) and a higher RTT.")]
+    for k, (head, color, do, watch) in enumerate(extras):
+        x = I(0.6 + k * 6.2)
+        box(s, x, I(1.8), I(5.9), I(4.0), "", fill=NIGHT_2, line=color, line_w=2)
+        text(s, x + I(0.35), I(2.0), I(5.2), I(0.5), head, size=24, bold=True, color=color)
+        text(s, x + I(0.35), I(2.75), I(5.2), I(3.0), [do, watch], size=20, color=WHITE,
+             space_after=14)
+    text(s, I(0.6), I(6.1), I(12.1), I(0.6),
+         "sudo sh metrics/netloss_mac.sh on 5050 0.3 0 en0   ·   off: sudo sh metrics/netloss_mac.sh off",
+         size=13, color=NIGHT_TEXT, font=MONO)
+    notes(s, """
+[Presenter 3] Only if we are ahead of time. First, TCP with thirty percent loss, made by the
+operating system: the game freezes and then jumps, because one lost packet holds back
+everything behind it. Second, a player on a phone hotspot joins through our Cloudflare tunnel.
+Otherwise we skip this slide.
+""", secs=0)
+
+
+# ---------------------------------------------------------------- part 5: results
+
+HOW = ("How we measured: 3 bots, 120 s games on one Mac, loss added on purpose "
+       "(TCP: by the kernel, UDP: by our --drop option).")
+
+
+def s_rtt(prs, rows):
+    s = frame(prs, "Under loss, TCP waits and UDP doesn't", kicker="Part 5 · Results",
+              tags=("TCP", "UDP"))
+    tv = [num(rows, "tcp", l, "rtt_mean_ms") for l in LOSSES]
+    uv = [num(rows, "udp", l, "rtt_mean_ms") for l in LOSSES]
+    bar_chart(s, I(0.6), I(1.7), I(7.4), I(4.4), "Round-trip time (ms)", tv, uv, '0.0;;0',
+              "chart rtt")
+    t30, u30 = tv[2], uv[2]
+    for k, (val, color, label) in enumerate(((t30, TCP, "TCP round trip at 30 % loss"),
+                                             (u30, UDP, "UDP round trip at 30 % loss"))):
+        y = I(1.8 + k * 1.55)
+        text(s, I(8.5), y, I(4.2), I(0.9), ms(val, 0 if (val or 0) >= 10 else 1), size=54,
+             bold=True, color=color, font=HEAD)
+        text(s, I(8.5), y + I(0.9), I(4.2), I(0.4), label, size=18, color=MUTED)
+    text(s, I(8.5), I(4.95), I(4.2), I(1.3),
+         "One lost TCP packet holds back everything behind it: head-of-line blocking.",
+         size=19, color=INK)
+    text(s, I(0.6), I(6.3), I(12.1), I(0.5), HOW, size=14, color=MUTED)
     notes(s, f"""
-[Presenter 3] These are our own numbers, from metrics slash results dot csv. Three bots, 120-second games
-on one Mac, at 0, 10 and 30 percent loss.
-Left chart: round-trip time. Without loss both are under 1 millisecond. With loss, TCP waits
-for every lost packet to be resent, and all later data waits behind it: that is head-of-line
-blocking. Its RTT grows to {r('tcp', 10, 'rtt_mean_ms')} and then {r('tcp', 30, 'rtt_mean_ms')}.
-UDP stays at about {r('udp', 30, 'rtt_mean_ms', 1)}, because nothing waits.
-Middle: TCP never loses a STATE; UDP simply skips the lost ones. Right: TCP freezes for more
-than a quarter second much more often. One honest caveat: TCP loss is applied by the kernel, UDP loss by our drop
-option, at the same rates. LAN and internet numbers we measure live today.
-""", [("Why is TCP loss done differently?",
+[Presenter 4] Now our measurements. We ran three bots for two minutes, with zero, ten and thirty
+percent of packets lost on purpose. This chart is the round-trip time. Without loss both are
+under one millisecond. With loss, TCP waits: when one packet is lost, everything behind it waits
+until it is resent. That is called head-of-line blocking. At thirty percent loss TCP needs
+{ms(t30)}; UDP stays at {ms(u30, 1)}, because it never waits.
+""", [("Why is the loss made differently for TCP?",
        "TCP must see real lost segments to resend them, so the kernel drops them; our --drop "
        "option only exists in the UDP code. Same rates, different method."),
-      ("Why measure on loopback?",
+      ("Why measure on one Mac?",
        "It removes Wi-Fi noise, so the only difference is the loss we add on purpose.")])
 
 
-def slide_differences(prs, rows):
-    u30 = num(rows, "udp", 30, "rtt_mean_ms")
-    t30 = num(rows, "tcp", 30, "rtt_mean_ms")
-    s = frame(prs, 6, "What differs, what hurt, who wins", tags=("TCP", "UDP"),
-              gloss="head-of-line blocking = one lost TCP segment makes all later data wait  ·  "
-                    "client isolation = Wi-Fi that blocks traffic between laptops")
-    rh = [Inches(0.5)] + [Inches(0.62)] * 5
-    tbl = table(s, Inches(0.6), Inches(1.45), Inches(7.4),
-                [Inches(1.8), Inches(2.8), Inches(2.8)], rh, "differences")
-    cell(tbl.cell(0, 0), "", 16, INK, True, None)
-    cell(tbl.cell(0, 1), "TCP", 18, WHITE, True, TCP, PP_ALIGN.CENTER)
-    cell(tbl.cell(0, 2), "UDP", 18, WHITE, True, UDP, PP_ALIGN.CENTER)
-    diff = [
-        ("Connection", "handshake, then a stream", "none: just send"),
-        ("Message edges", "we add \\n to each message", "1 datagram = 1 message"),
-        ("Lost packet", "OS resends; later data waits", "gone; we resend only key ones"),
-        ("Order", "always in order", "seq for key ones; old STATEs dropped"),
-        ("Leaver seen by", "FIN/RST + 5 s watchdog", "4 s heartbeat"),
-    ]
-    for i, (a, b, c) in enumerate(diff, start=1):
-        cell(tbl.cell(i, 0), a, 16, INK, True, WHITE)
-        cell(tbl.cell(i, 1), b, 16, INK, False, TCP_LIGHT)
-        cell(tbl.cell(i, 2), c, 16, INK, False, UDP_LIGHT)
+def s_lost(prs, rows):
+    s = frame(prs, "UDP skips lost updates, TCP freezes", kicker="Part 5 · Results",
+              tags=("TCP", "UDP"))
+    lost_t = [num(rows, "tcp", l, "states_missing_pct") for l in LOSSES]
+    lost_u = [num(rows, "udp", l, "states_missing_pct") for l in LOSSES]
+    fr_t = [num(rows, "tcp", l, "freezes_over_250ms") for l in LOSSES]
+    fr_u = [num(rows, "udp", l, "freezes_over_250ms") for l in LOSSES]
+    bar_chart(s, I(0.6), I(1.7), I(5.9), I(3.9), "Updates (STATEs) lost, %", lost_t, lost_u,
+              '0.0;;0', "chart lost")
+    bar_chart(s, I(6.8), I(1.7), I(5.9), I(3.9), "Freezes over 250 ms, per game", fr_t, fr_u, '0',
+              "chart freezes")
+    if None in (lost_u[2], fr_t[2], fr_u[2]):
+        take = f"At 30 % loss: {LIVE}."
+    else:
+        take = (f"At 30 % loss UDP skips {lost_u[2]:.0f} % of updates but freezes less: "
+                f"{fr_u[2]:.0f} vs {fr_t[2]:.0f} times per game.")
+    text(s, I(0.6), I(5.8), I(12.1), I(0.9), take, size=21, bold=True)
+    text(s, I(0.6), I(6.45), I(12.1), I(0.4),
+         "freeze = more than 250 ms with no new picture of the game", size=14, color=MUTED)
+    notes(s, f"""
+[Presenter 4] The other side of the story. Left: TCP never loses an update, zero percent at any
+loss. UDP skips the lost ones: about ten and thirty percent, exactly the loss we added. Right:
+freezes, moments of more than a quarter second without a new picture. TCP freezes much more
+often, because it waits for every lost packet. So for a live game, skipping an old picture is
+better than waiting for it.
+""")
 
-    fx = Inches(8.2)
-    text(s, fx, Inches(1.45), Inches(4.4), Inches(0.45), [[("Friction points", {"bold": True})]],
-         size=20)
-    fr = [
-        ("TCP", "one recv() ≠ one message → line buffer"),
-        ("UDP", "we built seq / ACK / resend ourselves"),
-        ("UDP", "heartbeat: short = false kicks, long = slow"),
-        ("UDP", "STATE 1228 B, near the ~1472 B safe size"),
-        ("both", "firewalls and Wi-Fi client isolation"),
-        ("both", "tunnels: Cloudflare is TCP-only"),
-    ]
-    for i, (who, t) in enumerate(fr):
-        y = Inches(1.98) + i * Inches(0.52)
-        col = TCP if who == "TCP" else UDP if who == "UDP" else MUTED
-        box(s, fx, y + Inches(0.06), Inches(0.68), Inches(0.34), who, fill=col, size=12,
-            color=WHITE, bold=True)
-        text(s, fx + Inches(0.8), y, Inches(3.75), Inches(0.48), t, size=15,
-             anchor=MSO_ANCHOR.MIDDLE)
 
-    by, bh, bw = Inches(5.25), Inches(1.15), Inches(5.95)
-    box(s, Inches(0.6), by, bw, bh, [
-        [("TCP was best for ", {"bold": True, "color": TCP}), ("the lobby, rooms and results:", {})],
-        "everything must arrive; works through firewalls and tunnels.",
-    ], fill=WHITE, line=TCP, size=17, align=PP_ALIGN.LEFT, margin=0.2, line_w=2)
-    udp_line = (f"RTT stayed {u30:.1f} ms at 30 % loss (TCP: {t30:.0f} ms)."
-                if None not in (u30, t30) else f"RTT under loss: {LIVE}.")
-    box(s, Inches(0.6) + bw + Inches(0.2), by, bw, bh, [
-        [("UDP was best for ", {"bold": True, "color": UDP}), ("live play when packets are lost:", {})],
-        udp_line,
-    ], fill=WHITE, line=UDP, size=17, align=PP_ALIGN.LEFT, margin=0.2, line_w=2)
+def s_detect(prs, rows):
+    s = frame(prs, "How fast a crashed player is noticed", kicker="Part 5 · Results",
+              tags=("TCP", "UDP"))
+    tcp_d = span([num(rows, "tcp", l, "detect_ms") for l in LOSSES])
+    udp_d = span([num(rows, "udp", l, "detect_ms") for l in LOSSES], seconds=True)
+    for k, (val, color, light, why) in enumerate((
+            (tcp_d, TCP, TCP_LIGHT, "The OS closes the connection for the dead program (FIN)."),
+            (udp_d, UDP, UDP_LIGHT, "No connection: we wait for 4 s of silence."))):
+        x = I(0.6 + k * 6.2)
+        box(s, x, I(1.8), I(5.9), I(3.1), "", fill=light)
+        text(s, x + I(0.4), I(2.0), I(5.1), I(0.5), "TCP" if k == 0 else "UDP", size=22,
+             bold=True, color=color)
+        text(s, x + I(0.4), I(2.55), I(5.1), I(1.2), val, size=60, bold=True, color=color,
+             font=HEAD)
+        text(s, x + I(0.4), I(3.85), I(5.1), I(0.9), why, size=19, color=INK)
+    c30 = num(rows, "udp", 30, "client_retransmissions")
+    s30 = num(rows, "udp", 30, "server_retransmissions")
+    g30 = num(rows, "udp", 30, "reliable_gave_up")
+    if None not in (c30, s30, g30):
+        line = (f"UDP at 30 % loss: {c30 + s30:.0f} important messages had to be resent, "
+                f"{g30:.0f} were given up.")
+    else:
+        line = f"UDP resends at 30 % loss: {LIVE}."
+    text(s, I(0.6), I(5.2), I(12.1), I(0.6), line, size=21, bold=True)
+    text(s, I(0.6), I(6.3), I(12.1), I(0.5),
+         "A bot killed with kill -9 in the middle of a game, at 0, 10 and 30 % loss.", size=14,
+         color=MUTED)
+    notes(s, f"""
+[Presenter 4] How fast is a crashed player noticed? With TCP, {tcp_d}: the operating system
+closes the connection. With UDP, {udp_d}: we have to wait for four seconds of silence. This is
+the price of having no connection. And our safety net works: at thirty percent loss, the
+important messages that were lost were resent, and none was given up.
+""")
+
+
+def s_wins(prs):
+    s = frame(prs, "Who wins? It depends on the message", kicker="Part 5 · Lessons",
+              tags=("TCP", "UDP"))
+    cards = [("TCP is best for", TCP, TCP_LIGHT,
+              ["Lobby, rooms, results: everything must arrive",
+               "Simple: order and resending come for free",
+               "Crashes noticed at once; passes firewalls and tunnels easily"]),
+             ("UDP is best for", UDP, UDP_LIGHT,
+              ["Live game updates when packets are lost",
+               "Never waits for an old picture",
+               "But: we had to build reliability ourselves"])]
+    for k, (head, color, light, items) in enumerate(cards):
+        x = I(0.6 + k * 6.2)
+        box(s, x, I(1.8), I(5.9), I(3.6), "", fill=light)
+        text(s, x + I(0.35), I(2.0), I(5.2), I(0.5), head, size=24, bold=True, color=color)
+        text(s, x + I(0.35), I(2.7), I(5.2), I(2.6), [[("• ", {"bold": True, "color": color}),
+                                                         (t, {})] for t in items],
+             size=20, color=INK, space_after=10)
+    box(s, I(0.6), I(5.65), I(12.1), I(0.95),
+        "Real games do what we did: UDP for live data + a small reliable layer for the rest.",
+        fill=NIGHT, color=WHITE, size=21, bold=True)
     notes(s, """
-[Presenter 4] To sum up the differences: TCP opens a connection and gives us an ordered
-stream; UDP just sends separate datagrams. With TCP we add the message edges ourselves; with
-UDP we add reliability ourselves, only for the messages that need it.
-Friction points: TCP framing; building seq, ACK and resend for UDP; tuning the heartbeat;
-a 1228-byte STATE close to the safe UDP size; firewalls and Wi-Fi that isolates laptops; and
-Cloudflare carrying only TCP.
-So where did each protocol win? TCP for the lobby and results, where everything must arrive,
-and it passes firewalls easily. UDP for live play under loss: its round-trip time stayed flat.
+[Presenter 4] So which one is better? It depends on the message. TCP is best when everything
+must arrive: the lobby, the rooms, the results. It is simple, notices crashes immediately and
+passes firewalls easily. UDP is best for the live game when packets are lost, because it never
+waits for an old picture, but we had to build reliability ourselves. Real online games do what
+we did: UDP for live data, plus a small reliable layer for the rest.
 """, [("If you started again, which one would you choose?",
        "UDP for the game data and our reliable layer for the lobby, like we did, because the game "
-       "only needs the newest STATE."),
-      ("What happens if STATE grows past the safe size?",
-       "IP would split the datagram; losing one piece loses the whole STATE. We warn above 1200 "
-       "bytes; a fix would be sending only changes.")])
+       "only needs the newest STATE.")])
 
 
-def slide_bonus(prs, paths):
-    s = frame(prs, 7, "Bonus: players on different networks", tags=("TCP", "UDP"), dark=True,
-              gloss="NAT = a router sharing one public IP; it blocks unasked incoming traffic  ·  "
-                    "tunnel = a link that carries our traffic through a relay")
-
-    def lane(y, color, label, steps):
-        text(s, Inches(0.6), y - Inches(0.48), Inches(8), Inches(0.4),
-             [[(label, {"bold": True, "color": color})]], size=18)
-        n = len(steps)
-        gap = Inches(0.42)
-        bw = (Inches(12.1) - gap * (n - 1)) // n
-        for i, st in enumerate(steps):
-            x = Inches(0.6) + i * (bw + gap)
-            last = i == n - 1
-            box(s, x, y, bw, Inches(1.0), st, fill=color if last else NIGHT_2,
-                line=color, size=14, color=WHITE, line_w=1.75)
-            if not last:
-                arrow(s, x + bw, y + Inches(0.5), x + bw + gap, y + Inches(0.5), color=color,
-                      width=2.25)
-
-    lane(Inches(1.9), TCP, "TCP · Cloudflare Tunnel", [
-        [[("player PC", {"bold": True})], "client → localhost:15050"],
-        [[("cloudflared", {"bold": True})], "access tcp"],
-        [[("Cloudflare edge", {"bold": True})], "on the internet"],
-        [[("tunnel", {"bold": True})], "opened outward by the server"],
-        [[("tcp/server.py :5050", {"bold": True})], "sees 127.0.0.1"],
-    ])
-    lane(Inches(3.55), UDP, "UDP · playit.gg", [
-        [[("player PC", {"bold": True})], "client, no extra app"],
-        [[("xxx.ply.gg : port", {"bold": True})], "public UDP address"],
-        [[("playit relay", {"bold": True})], "on the internet"],
-        [[("playit agent", {"bold": True})], "reverse tunnel, opened outward"],
-        [[("udp/server.py :5050", {"bold": True})], "sees the agent's address"],
-    ])
-    lan = paths.get("lan", {})
-    net = {k: v for k, v in paths.items() if k in ("cloudflare", "playit")}
-    if lan or net:
-        parts = [f"{k} {p.upper()} {ms(v, 1)}" for k, d in list(lan and {"lan": lan}.items()) +
-                 list(net.items()) for p, v in d.items()]
-        rtt = "RTT: " + " · ".join(parts)
-    else:
-        rtt = f"RTT internet vs LAN: {LIVE}."
-    text(s, Inches(0.6), Inches(4.75), Inches(12.1), Inches(1.6), [
-        [("No port forwarding: ", {"bold": True, "color": WHITE}),
-         ("both tunnels are dialed out from the server, so the router (NAT) needs no change.", {})],
-        [("Two services: ", {"bold": True, "color": WHITE}),
-         ("Cloudflare quick tunnels carry TCP only; playit relays UDP.", {})],
-        [("Proof: ", {"bold": True, "color": WHITE}),
-         ("each player runs ", {}), ("curl -4 ifconfig.me", {"font": MONO, "color": WHITE}),
-         (" → 3 different public IPs.  ", {}), (rtt, {})],
-    ], size=17, color=NIGHT_TEXT, space_after=6)
-    text(s, Inches(0.6), Inches(6.25), Inches(12.1), Inches(0.35),
-         f"Status: {BONUS_STATUS['tcp']}  ·  {BONUS_STATUS['udp']}", size=13,
-         color=RGBColor(0xFF, 0xC5, 0x3D))
+def s_hard(prs):
+    s = frame(prs, "What was hard", kicker="Part 5 · Lessons")
+    cards = [("TCP", TCP, "One recv() is not one message",
+              "We added line framing and tested split and merged messages."),
+             ("UDP", UDP, "Building seq, ACK and resend",
+              "Tested at 30 % loss: everything important arrives once, in order."),
+             ("both", MUTED, "Choosing the timeout",
+              "Too short kicks players on bad Wi-Fi, too long is slow: we chose 4–5 s."),
+             ("both", MUTED, "Real networks",
+              "Firewalls and Wi-Fi that blocks laptops from each other: we check with netcheck first.")]
+    for k, (tag, color, head, body) in enumerate(cards):
+        x = I(0.6 + (k % 2) * 6.2)
+        y = I(1.8 + (k // 2) * 2.35)
+        box(s, x, y, I(5.9), I(2.1), "", fill=WHITE, line=LINE)
+        box(s, x + I(0.3), y + I(0.3), I(0.95), I(0.42), tag, fill=color, size=16, color=WHITE,
+            bold=True)
+        text(s, x + I(1.45), y + I(0.27), I(4.2), I(0.5), head, size=21, bold=True)
+        text(s, x + I(0.3), y + I(0.95), I(5.3), I(1.1), body, size=18, color=MUTED)
     notes(s, """
-[Presenter 4] The bonus is to play from different networks, like campus Wi-Fi and two hotspots. Our server sits behind a router with NAT, which blocks connections that come
-in from outside, and we did not open any port. Instead, the server dials out.
-For TCP, cloudflared on the server opens a tunnel to Cloudflare. A remote player runs
-cloudflared access tcp, which gives them a local port; their client connects there, and the
-traffic goes through Cloudflare's edge to our port 5050. The server sees 127.0.0.1, where the tunnel ends.
-Cloudflare quick tunnels do not carry UDP, so for UDP we use playit: the player sends
-datagrams to a public playit address, and the playit agent on our server, through its reverse
-tunnel, delivers them to the UDP server.
-Proof: each player shows a different public IP with curl ifconfig.me.
-""", [("Why not just forward port 5050 on the router?",
-       "We do not control campus or hotspot routers, and many use carrier NAT; an outgoing tunnel "
-       "works everywhere."),
-      ("Does the tunnel change the protocol comparison?",
-       "It adds delay, and playit still carries UDP datagrams, so the TCP vs UDP behaviour stays; we "
-       "show the internet RTT next to the LAN one.")])
+[Presenter 4] What was hard? With TCP, understanding that one recv is not one message. With UDP,
+building sequence numbers, ACKs and resends ourselves, and testing them under loss. For both,
+choosing the timeout: too short and players on bad Wi-Fi get kicked, too long and a dead player
+stays in the game. And real networks: firewalls, and campus Wi-Fi that blocks laptops from
+talking to each other. That is why we check the network with a small tool before playing.
+""", [("What happens if STATE grows past the safe UDP size?",
+       "IP would split the packet and losing one piece loses the whole STATE. Ours is 1228 bytes, "
+       "under the ~1472-byte limit; we warn above 1200.")])
 
+
+def s_bonus(prs, paths):
+    s = frame(prs, "Bonus: players on different networks", kicker="Part 5 · Bonus",
+              tags=("TCP", "UDP"))
+    rows = [("TCP", TCP, ["player", "Cloudflare\n(internet)", "tunnel opened\nby the server",
+                          "TCP server\n:5050"]),
+            ("UDP", UDP, ["player", "playit.gg relay\n(internet)", "playit agent\non the server",
+                          "UDP server\n:5050"])]
+    for r, (proto, color, steps) in enumerate(rows):
+        y = I(1.8 + r * 1.65)
+        pill(s, I(0.6), y + I(0.3), proto, color)
+        for k, label in enumerate(steps):
+            x = I(1.85 + k * 2.75)
+            last = k == len(steps) - 1
+            box(s, x, y, I(2.3), I(1.05), label.split("\n"), fill=color if last else WHITE,
+                line=color, size=17, color=WHITE if last else INK, line_w=2)
+            if not last:
+                arrow(s, x + I(2.3), y + I(0.52), x + I(2.75), y + I(0.52), color=color, width=2.5)
+    text(s, I(0.6), I(5.2), I(12.1), I(0.5),
+         "No change on any router: the server dials out to the relay.", size=21, bold=True)
+    text(s, I(0.6), I(5.8), I(12.1), I(0.9), [
+        [("Status  ", {"bold": True, "color": INK}), (BONUS_STATUS["tcp"], {})],
+        [("", {}), (BONUS_STATUS["udp"], {})]], size=17, color=MUTED, space_after=2)
+    notes(s, """
+[Presenter 4] The bonus: players on different networks. Routers block connections that come in
+from outside, and we cannot change campus or hotspot routers. So the server dials out. For TCP a
+Cloudflare tunnel carries the traffic from a remote player to our server. Cloudflare does not
+carry UDP, so for UDP we use a relay called playit. The TCP path works; the UDP tunnel is not
+set up yet.
+""", [("Why not just open port 5050 on the router?",
+       "We do not control campus or hotspot routers, and many use carrier NAT; an outgoing tunnel "
+       "works everywhere.")])
+
+
+def s_end(prs):
+    s = frame(prs, "What we take away", kicker="Conclusion", kicker_color=GOLD, dark=True)
+    points(s, I(0.6), I(1.9), I(12.1), [
+        ("TCP:", "reliable and simple, but one lost packet makes everything wait."),
+        ("UDP:", "never stuck on an old packet, but we decide what to resend."),
+        ("For a live game:", "UDP plus a small reliable layer gives the best of both."),
+    ], GOLD, gap=1.0, size=24, dark=True)
+    text(s, I(0.6), I(4.95), I(12.1), I(0.9), "Thank you! Questions?", size=44, bold=True,
+         color=GOLD, font=HEAD)
+    text(s, I(0.6), I(5.95), I(12.1), I(0.5), " · ".join(TEAM), size=18, color=NIGHT_TEXT)
+    notes(s, """
+[Presenter 4] To conclude. TCP is reliable and simple, but one lost packet makes everything
+wait. UDP never gets stuck on an old packet, but we have to decide ourselves what to resend.
+For a live game, UDP with a small reliable layer gives the best of both. Thank you, we are happy
+to answer your questions.
+""")
+
+
+# ---------------------------------------------------------------- script
 
 def write_script(prs):
-    """docs/presentation_script.md: the notes in order, with timings from their length."""
-    out = ["# Presentation script", "",
+    """docs/presentation_script.md: the notes in order, with timings."""
+    out = ["# Presentation script (20 minutes, with live demo)", "",
            f"Generated by `slides/build_slides.py` from the speaker notes of "
-           f"`{OUT.relative_to(ROOT)}`; edit the notes there, then re-run. Timings assume "
-           f"{WPM} words per minute.", "",
-           "Presenters: " + ", ".join(f"Presenter {i + 1} = {n}" for i, n in enumerate(TEAM))
-           + ("" if any(n.startswith("[") for n in TEAM) else
-              ' (re-run with `--team "..."` to change)'), ""]
+           f"`{OUT.relative_to(ROOT)}`; edit the notes there, then re-run. Talk slides are timed "
+           f"at {WPM} words per minute; demo slides have a fixed time. The demo steps and "
+           f"what to check are in [demo_scenarios.md](demo_scenarios.md).", "",
+           "Presenters: " + ", ".join(f"Presenter {i + 1} = {n}" for i, n in enumerate(TEAM)), ""]
     total = 0
     rows, parts = [], []
     for i, slide in enumerate(prs.slides, start=1):
         title = next((sh.text_frame.text for sh in slide.shapes if sh.name == "title"), "")
         body, _, qa = slide.notes_slide.notes_text_frame.text.partition("Likely question")
-        secs = round(len(body.split()) / WPM * 60 / 5) * 5
+        secs = SECS.get(slide.slide_id)
+        if secs is None:
+            secs = round(len(body.split()) / WPM * 60 / 5) * 5
         start = total
         total += secs
         presenter = body.strip().split("]")[0].lstrip("[")
-        rows.append(f"| {i} | {title} | {presenter} | {start // 60}:{start % 60:02d} | {secs} s |")
+        length = f"{secs} s" if secs else "skip if late"
+        rows.append(f"| {i} | {title} | {presenter} | {start // 60}:{start % 60:02d} | {length} |")
         qa = ("Likely question" + qa).strip() if qa else ""
-        parts += [f"## Slide {i}: {title} ({secs} s)", "",
+        parts += [f"## Slide {i}: {title} ({length})", "",
                   " ".join(body.split()), "", *(f"> {l}" if l else ">" for l in qa.splitlines()), ""]
     out += ["| Slide | Title | Who | Starts at | Length |", "|---|---|---|---|---|", *rows,
             f"| | **Total** | | | **{total // 60} min {total % 60:02d} s** |", ""]
@@ -843,25 +1167,38 @@ def write_script(prs):
 def build():
     rows = load_results()
     paths = load_rtt_paths()
-    if not CHARTS.exists():
-        print(f"note: {CHARTS} is missing; run metrics/make_charts.py for the PNG charts")
     prs = Presentation()
     prs.slide_width, prs.slide_height = W, H
     prs.core_properties.title = "Maze Arena: TCP vs UDP"
-    slide_intro(prs)
-    slide_tcp(prs)
-    slide_udp(prs)
-    slide_players(prs, rows)
-    slide_metrics(prs, rows, paths)
-    slide_differences(prs, rows)
-    slide_bonus(prs, paths)
+    s_title(prs)
+    s_agenda(prs)
+    s_game(prs)
+    s_arch(prs)
+    s_flow(prs)
+    s_shared(prs)
+    s_tcp(prs)
+    s_stream(prs)
+    s_udp(prs)
+    s_reliable(prs)
+    s_split(prs)
+    s_vanish(prs, rows)
+    s_demo_plan(prs)
+    s_demos(prs)
+    s_rtt(prs, rows)
+    s_lost(prs, rows)
+    s_detect(prs, rows)
+    s_wins(prs)
+    s_hard(prs)
+    s_bonus(prs, paths)
+    s_end(prs)
+    footers(prs)
     OUT.parent.mkdir(parents=True, exist_ok=True)
     prs.save(OUT)
     total = write_script(prs)
     have = sorted(f"{p}{l}" for p, l in rows)
-    print(f"wrote {OUT.relative_to(ROOT)} (7 slides; loopback rows: {', '.join(have)}; "
-          f"rtt paths: {', '.join(paths) or 'none'}); "
-          f"wrote {SCRIPT.relative_to(ROOT)} ({total // 60} min {total % 60:02d} s)")
+    print(f"wrote {OUT.relative_to(ROOT)} ({len(prs.slides)} slides; loopback rows: "
+          f"{', '.join(have)}); wrote {SCRIPT.relative_to(ROOT)} ({total // 60} min "
+          f"{total % 60:02d} s)")
 
 
 if __name__ == "__main__":
