@@ -38,7 +38,7 @@ OUT = ROOT / "slides" / "maze_arena_tcp_vs_udp.pptx"
 SCRIPT = ROOT / "docs" / "presentation_script.md"
 WPM = 140  # calm speaking speed, words per minute
 
-TEAM = ["[Name 1]", "[Name 2]", "[Name 3]", "[Name 4]"]
+TEAM = ["Baya Chaabene", "Mohamed Aziz Souissi", "Yahia Mahfoudh", "Yassine Friaa"]
 BONUS_STATUS = {
     "tcp": "TCP: full games through the Cloudflare tunnel, tested from the server Mac",
     "udp": "UDP: playit agent ready, UDP tunnel not set up yet",
@@ -129,6 +129,12 @@ def who(i):
     """Presenter i's name, or 'Presenter i' while TEAM still has placeholders."""
     n = TEAM[i - 1] if i <= len(TEAM) else f"[Name {i}]"
     return f"Presenter {i}" if n.startswith("[") else n
+
+
+def first(i):
+    """Name without the family name ('Mohamed Aziz'), for small spaces."""
+    n = who(i)
+    return n if n.startswith("Presenter") or " " not in n else n.rsplit(" ", 1)[0]
 
 
 def team_names():
@@ -427,11 +433,11 @@ def s_agenda(prs):
         [[("Our question: ", {"bold": True}),
           ("which transport suits a real-time multiplayer game, and why?", {})]],
         fill=WHITE, line=LINE, size=24, align=PP_ALIGN.LEFT, margin=0.3)
-    parts = [("1", "The game and our design", "3 min", who(1), None),
-             ("2", "The TCP version", "2 min", who(2), TCP),
-             ("3", "The UDP version", "3 min", who(2), UDP),
+    parts = [("1", "The game and our design", "3 min", first(1), None),
+             ("2", "The TCP version", "2 min", first(2), TCP),
+             ("3", "The UDP version", "3 min", first(2), UDP),
              ("4", "Live demo on 4 laptops", "8 min", "everyone", GOLD),
-             ("5", "Results and lessons", "4 min", who(4), None)]
+             ("5", "Results and lessons", "4 min", first(4), None)]
     bw, gap, y = 2.3, 0.15, 3.05
     for k, (n, label, mins, by, color) in enumerate(parts):
         x = I(0.6 + k * (bw + gap))

@@ -6,10 +6,10 @@ laptops and the real network (section 1), then again live (section 2).
 
 | Laptop | Who | Job in the demo |
 |---|---|---|
-| **S** | Presenter 3 | runs the servers; the server log is on the projector |
-| **A** | Presenter 1 | plays `alice` |
-| **B** | Presenter 2 | plays `bob`; turns Wi-Fi off in game 4 |
-| **C** | Presenter 4 | plays `carol`; its game is killed in games 1 and 2 |
+| **S** | Yahia Mahfoudh (Presenter 3) | runs the servers; the server log is on the projector |
+| **A** | Baya Chaabene (Presenter 1) | plays `alice` |
+| **B** | Mohamed Aziz Souissi (Presenter 2) | plays `bob`; turns Wi-Fi off in game 4 |
+| **C** | Yassine Friaa (Presenter 4) | plays `carol`; its game is killed in games 1 and 2 |
 
 `S_IP` = the address S's server prints at startup. Port **5050**. Games last **60 s**.
 Every command runs in the `maze-arena` folder with the venv active
