@@ -7,7 +7,8 @@ when it exists), so after new measurements just run:
 
 Speaking order: Presenter 1 = the game and the design, Presenter 2 = TCP and UDP,
 Presenter 3 = runs the live demo (server laptop), Presenter 4 = results and conclusion.
-In the demo, Presenter 1 plays alice, Presenter 2 bob, Presenter 4 carol.
+In the demo, Presenter 1 plays alice, Presenter 2 bob, Presenter 4 carol; Presenter 3
+also runs dave, a 4th player, on the server laptop for test 1.
 A value that was never measured is shown as "measured live in the demo", never guessed.
 Charts are native PowerPoint charts, TCP blue and UDP orange as in metrics/charts/*.png.
 Also writes docs/presentation_script.md (speaker notes + timings).
@@ -38,7 +39,7 @@ OUT = ROOT / "slides" / "maze_arena_tcp_vs_udp.pptx"
 SCRIPT = ROOT / "docs" / "presentation_script.md"
 WPM = 140  # calm speaking speed, words per minute
 
-TEAM = ["Baya Chaabene", "Mohamed Aziz Souissi", "Yahia Mahfoudh", "Yassine Friaa"]
+TEAM = ["Baya Chaabene", "Mohamed Aziz Souissi", "Yassine Friaa", "Yahia Mahfoudh"]
 BONUS_STATUS = {
     "tcp": "TCP: full games through the Cloudflare tunnel, tested from the server Mac",
     "udp": "UDP: playit agent ready, UDP tunnel not set up yet",
@@ -782,124 +783,152 @@ this live.
 
 # ---------------------------------------------------------------- part 4: live demo
 
-DEMO_ROLES = None   # filled in build(): who plays which laptop
+DEMO_SECS = (80, 100, 110, 100, 90)
 
 
 def s_demo_plan(prs):
-    s = frame(prs, "Live demo: 4 games on 4 laptops", kicker="Part 4 · Live demo",
+    s = frame(prs, "Live demo: 5 short tests on 4 laptops", kicker="Part 4 · Live demo",
               kicker_color=GOLD, dark=True)
-    games = [("GAME 1", "TCP", "Normal game, then a crash", "crash noticed at once"),
-             ("GAME 2", "UDP", "Normal game, then a crash", "crash noticed after 4 s"),
-             ("GAME 3", "UDP", "30 % of packets thrown away", "the game keeps going"),
-             ("GAME 4", "TCP", "Wi-Fi off in the middle", "player dropped after 5 s")]
-    cw, gap = 2.9, 0.17
+    games = [("TEST 1", "TCP", "Joining rules", "the server says no"),
+             ("TEST 2", "TCP", "Play, then a crash", "crash noticed at once"),
+             ("TEST 3", "UDP", "Same on UDP, then a crash", "noticed after 4 s"),
+             ("TEST 4", "UDP", "30 % of packets lost", "the game keeps going"),
+             ("TEST 5", "TCP", "Wi-Fi off during a game", "player dropped after 5 s")]
+    cw, gap = 2.3, 0.15
     for k, (g, proto, title, result) in enumerate(games):
         x = I(0.6 + k * (cw + gap))
         color = TCP if proto == "TCP" else UDP
-        box(s, x, I(1.8), I(cw), I(2.95), "", fill=NIGHT_2, line=color, line_w=2)
-        text(s, x + I(0.25), I(2.0), I(1.5), I(0.4), g, size=16, bold=True, color=GOLD)
-        pill(s, x + I(cw - 1.2), I(1.97), proto, color)
-        text(s, x + I(0.25), I(2.6), I(cw - 0.5), I(1.2), title, size=22, bold=True, color=WHITE)
-        text(s, x + I(0.25), I(3.85), I(cw - 0.5), I(0.8), result, size=18, color=NIGHT_TEXT)
-    text(s, I(0.6), I(5.05), I(12.1), I(1.0), [
-        [("Server laptop: ", {"bold": True, "color": GOLD}), (who(3) + ", its log on the projector", {})],
+        box(s, x, I(1.8), I(cw), I(2.75), "", fill=NIGHT_2, line=color, line_w=2)
+        text(s, x + I(0.2), I(1.98), I(1.2), I(0.4), g, size=15, bold=True, color=GOLD)
+        box(s, x + I(cw - 0.95), I(1.95), I(0.8), I(0.38), proto, fill=color, size=14,
+            color=WHITE, bold=True)
+        text(s, x + I(0.2), I(2.55), I(cw - 0.4), I(1.1), title, size=21, bold=True, color=WHITE)
+        text(s, x + I(0.2), I(3.7), I(cw - 0.4), I(0.8), result, size=17, color=NIGHT_TEXT)
+    text(s, I(0.6), I(4.85), I(12.1), I(1.2), [
+        [("Server laptop: ", {"bold": True, "color": GOLD}),
+         (f"{who(3)}, the server log on the projector (and a 4th player, dave, for test 1)", {})],
         [("Players: ", {"bold": True, "color": GOLD}),
          (f"alice = {who(1)}  ·  bob = {who(2)}  ·  carol = {who(4)}", {})],
     ], size=20, color=WHITE, space_after=6)
-    text(s, I(0.6), I(6.2), I(12.1), I(0.5),
-         "If we have time: TCP with 30 % loss, and a player on another network.", size=18,
-         color=NIGHT_TEXT)
+    text(s, I(0.6), I(6.15), I(12.1), I(0.5),
+         "Each test: what we try → what should happen. If we have time: TCP with 30 % loss, "
+         "and a player on another network.", size=17, color=NIGHT_TEXT)
     notes(s, """
-[Presenter 3] Now the live demo. We play four short games, and each one proves something.
-Games 1 and 2: a normal game on TCP and on UDP, and in each one we crash a player on purpose.
-Game 3: UDP with 30 percent of the packets thrown away. Game 4: a player's Wi-Fi goes off.
-I run the server; its log is on the projector so you can see every event with its time.
+[Presenter 3] Now the live demo: five short tests. For each one the slide says what we try and
+what should happen, so you can check it with us. Tests 1 and 2 use TCP: the joining rules, then
+a game where we crash a player. Test 3 does the same crash over UDP. Test 4 throws away thirty
+percent of the packets. Test 5 turns a player's Wi-Fi off. I run the server; its log is on the
+projector so you can see every event with its time.
 """, secs=40)
 
 
-def demo_slide(prs, n, proto, title, do, watch, proves, command, note, secs):
+def demo_slide(prs, n, proto, title, rows, proves, command, note, secs):
+    """One live test: a table 'what we try → what should happen', what it proves, the commands."""
     color = TCP if proto == "TCP" else UDP
-    s = frame(prs, title, kicker=f"Live demo · Game {n}", kicker_color=GOLD, tags=(proto,),
-              dark=True)
-    cols = [("We do", do, True), ("Watch for", watch, False), ("This proves", proves, False)]
-    cw, gap = 3.85, 0.27
-    for k, (head, items, numbered) in enumerate(cols):
-        x = I(0.6 + k * (cw + gap))
-        box(s, x, I(1.8), I(cw), I(4.25), "", fill=NIGHT_2,
-            line=GOLD if k == 2 else None, line_w=2)
-        text(s, x + I(0.3), I(1.98), I(cw - 0.6), I(0.5), head, size=22, bold=True,
-             color=GOLD if k == 2 else color if k == 0 else WHITE)
-        paras = [[(f"{i + 1}.  " if numbered else "• ", {"bold": True, "color": GOLD}),
-                  (t, {})] for i, t in enumerate(items)]
-        text(s, x + I(0.3), I(2.6), I(cw - 0.6), I(3.35), paras, size=19, color=WHITE,
-             space_after=10)
-    text(s, I(0.6), I(6.25), I(12.1), I(0.55), command, size=13, color=NIGHT_TEXT, font=MONO)
+    s = frame(prs, title, kicker=f"Live demo · Test {n} · {proto}", kicker_color=GOLD,
+              tags=(proto,), dark=True)
+    rh = [I(0.5)] + [I(0.78)] * len(rows)
+    tbl = table(s, I(0.6), I(1.75), I(12.1), [I(0.6), I(5.3), I(6.2)], rh, f"test {n}")
+    cell(tbl.cell(0, 0), "#", 17, WHITE, True, color, PP_ALIGN.CENTER)
+    cell(tbl.cell(0, 1), "What we try", 17, WHITE, True, color)
+    cell(tbl.cell(0, 2), "What should happen", 17, WHITE, True, color)
+    for k, (try_, expect) in enumerate(rows, start=1):
+        cell(tbl.cell(k, 0), str(k), 19, GOLD, True, NIGHT_2, PP_ALIGN.CENTER)
+        cell(tbl.cell(k, 1), try_, 19, WHITE, False, NIGHT_2)
+        cell(tbl.cell(k, 2), expect, 19, WHITE, False, NIGHT)
+    y = 1.75 + 0.5 + 0.78 * len(rows) + 0.2
+    box(s, I(0.6), I(y), I(12.1), I(0.6),
+        [[("This proves: ", {"bold": True, "color": GOLD}), (proves, {})]],
+        fill=NIGHT_2, line=GOLD, size=19, color=WHITE, align=PP_ALIGN.LEFT, margin=0.25,
+        line_w=1.5)
+    text(s, I(0.6), I(6.35), I(12.1), I(0.55), command, size=12, color=NIGHT_TEXT, font=MONO)
     notes(s, note, secs=secs)
     return s
 
 
 def s_demos(prs):
+    tcp_cmd = ("server: python -m tcp.server · players: python -m client_ui.ui --proto tcp "
+               "--host S_IP --name alice --room demo")
+    udp_cmd = tcp_cmd.replace("tcp", "udp")
     demo_slide(
-        prs, 1, "TCP", "TCP: a normal game, then a crash",
-        ["Start the TCP server", "bob first tries the name “alice” → refused",
-         "All three join room demo and press R", "At 0:40 left, carol's game is killed"],
-        ["Same maze and scores on 3 screens", "RTT in the corner: a few ms",
-         "Server log: 3 different IP addresses", "“carol left” in the same second"],
-        ["Login, rooms and the 10 ticks/s game work over TCP",
-         "A crash is seen at once: carol's OS closes the connection (FIN)"],
-        "server: python -m tcp.server · players: python -m client_ui.ui --proto tcp "
-        "--host S_IP --name alice --room demo · crash: pkill -9 -f client_ui.ui",
-        """[Presenter 3] Game 1, TCP. I start the TCP server. bob first tries to log in as alice:
-        refused, the name is taken. Then the three players join room demo and press R. Look at
-        the log: three connections from three different addresses. Watch the RTT in the corner of
-        each screen. At forty seconds left, carol's game is killed, with no goodbye. The log shows
-        carol left in the same second, because carol's operating system closes the TCP connection.
-        alice and bob keep playing to the end and get the same ranking.""", 120)
+        prs, 1, "TCP", "Joining rules: the server says no",
+        [("alice and bob both log in as “alice” at the same moment",
+          "Only one gets in. The other sees “Login refused: name already taken”"),
+         ("A 4th player, dave, tries to join the full room",
+          "“Room is full”: a room holds 3 players"),
+         ("Only alice and bob press R (ready)", "Nothing starts: the game waits for carol"),
+         ("carol presses R; then dave tries to join again",
+          "The game starts; dave gets “Game already running”")],
+        "the server enforces the rules: unique names, 3 players per room, start only when all are ready.",
+        tcp_cmd + " · dave runs on the server laptop",
+        """[Presenter 3] Test 1: the joining rules, over TCP. alice and bob both type the name
+        alice and press Enter at the same moment. Only one gets in; the other sees name already
+        taken. Then the room fills up with alice, bob and carol, and dave, a fourth player on my
+        laptop, tries to join: room is full. alice and bob press ready, but nothing starts until
+        carol is ready too. When carol presses R the game starts, and dave now gets game already
+        running.""", DEMO_SECS[0])
     demo_slide(
-        prs, 2, "UDP", "UDP: the same game, then a crash",
-        ["Start the UDP server", "The same three players join and press R",
-         "At 0:40 left, carol's game is killed"],
-        ["Server log: “NEW PEER”, not “CONNECT”", "Corner: lost 0 % of updates",
-         "“carol left” only after about 4 s"],
-        ["The same game works over UDP", "UDP has nothing to close: silence is the only signal"],
-        "server: python -m udp.server · players: python -m client_ui.ui --proto udp "
-        "--host S_IP --name alice --room demo",
-        """[Presenter 3] Game 2, the same game over UDP. The log now says NEW PEER instead of
-        CONNECT: there is no connection, the server just sees packets from a new address. The
-        corner shows lost zero percent of updates on our network. At forty seconds left we kill
-        carol again. This time nothing happens at first: carol's laptop has nothing to close. Count
-        with me: after about four seconds of silence the server removes carol.""", 100)
+        prs, 2, "TCP", "Playing, then a crash",
+        [("Everyone plays", "Same maze, scores and timer on the 3 screens; RTT of a few ms in the corner"),
+         ("At 0:40 left, carol's game is killed (no goodbye)",
+          "Server log: “carol left” in the same second; alice and bob keep playing"),
+         ("carol logs in again straight away", "Accepted: the server already removed the old carol"),
+         ("The timer reaches 0:00", "Same ranking and winner on every screen")],
+        "TCP notices a crash at once: carol's operating system closes the connection (FIN).",
+        tcp_cmd + " · crash: pkill -9 -f client_ui.ui",
+        """[Presenter 3] Test 2, the game itself. Look: the same maze and the same scores on the
+        three screens, and a round trip of a few milliseconds in the corner. At forty seconds left
+        we kill carol's game, with no goodbye. The log says carol left in the same second, because
+        carol's operating system closes the TCP connection. carol can log in again straight away.
+        At the end everyone sees the same ranking.""", DEMO_SECS[1])
     demo_slide(
-        prs, 3, "UDP", "UDP with 30 % packet loss",
-        ["Restart server and players with --drop 0.3",
-         "Each side throws away 30 % of what it sends", "Log in, join, press R, play"],
-        ["Login and rooms still work", "Corner: lost about 30 % of updates",
-         "Moves are jumpier, but never stop", "After: the log shows resends, 0 given up"],
-        ["Our safety net saves the important messages",
-         "Skipping old STATEs keeps the game live"],
+        prs, 3, "UDP", "The same game over UDP, then a crash",
+        [("Everyone joins over UDP and plays", "Log: “NEW PEER”, not “CONNECT”; corner: lost 0 % of updates"),
+         ("At 0:40 left, carol's game is killed", "Nothing at first; “carol left” only after about 4 s"),
+         ("carol logs in again straight away",
+          "Refused, “name already taken”: the server still thinks the old carol is there"),
+         ("carol tries again after 4 s", "Accepted")],
+        "UDP has no connection to close: silence is the only signal, so it takes 4 s.",
+        udp_cmd + " · crash: pkill -9 -f client_ui.ui",
+        """[Presenter 3] Test 3, the same over UDP. The log says NEW PEER instead of CONNECT:
+        there is no connection, just packets from a new address. We kill carol again. This time
+        nothing happens at first, and if carol logs in straight away it is refused: for the server
+        the old carol is still there. Count with me: after about four seconds of silence, carol
+        left, and now carol can log in again. That is the price of having no connection.""",
+        DEMO_SECS[2])
+    demo_slide(
+        prs, 4, "UDP", "UDP with 30 % of packets lost",
+        [("Restart the server and players with --drop 0.3",
+          "Each side throws away 30 % of what it sends; log: drop=30%"),
+         ("Log in, join, press R", "Still works, maybe after a short pause: these messages are resent"),
+         ("Play the whole game", "Corner: lost about 30 % of updates. Moves jump, but never stop"),
+         ("Stop the server after the game", "Statistics: resends > 0, given up = 0")],
+        "our safety net saves the important messages, and skipping old pictures keeps the game live.",
         "server: python -m udp.server --drop 0.3 · players: python -m client_ui.ui --proto udp "
         "--host S_IP --drop 0.3 --name alice --room demo",
-        """[Presenter 3] Game 3: we now throw away thirty percent of all packets on purpose, on the
-        server and on every player. Login, joining the room and ready still work: these messages
-        use our safety net and are resent. In the corner you see about thirty percent of updates
-        lost. The players jump a bit, but the game never stops, because we never wait for an old
-        picture. When the game ends I stop the server: its statistics show the resends, and zero
-        messages given up.""", 110)
+        """[Presenter 3] Test 4: we throw away thirty percent of all packets, on the server and on
+        every player. Logging in, joining and ready still work: these messages use our safety net
+        and are resent. During the game the corner shows about thirty percent of updates lost. The
+        players jump a bit, but the game never stops and nobody is kicked. After the game the
+        server statistics show the resends, and zero messages given up.""", DEMO_SECS[3])
     demo_slide(
-        prs, 4, "TCP", "TCP: Wi-Fi off in the middle of a game",
-        ["Back to TCP, all three press R", "At 0:40 left, bob's laptop turns Wi-Fi off",
-         "bob's game stays open"],
-        ["bob stops moving on the other screens", "After about 5 s: “bob left”",
-         "bob's window: “server silent”", "alice and carol keep playing"],
-        ["With no network there is no FIN: TCP alone would wait for minutes",
-         "Our heartbeat (a PING every second) catches it in 5 s"],
-        "server: python -m tcp.server · players: python -m client_ui.ui --proto tcp "
-        "--host S_IP --name bob --room demo · Wi-Fi off from the menu bar",
-        """[Presenter 3] Game 4, back to TCP. At forty seconds left, bob turns the Wi-Fi off but
-        keeps the game open. Now there is no crash, so no operating system closes anything: TCP
-        alone would wait for minutes. On the other screens bob stops moving, and about five
-        seconds later the server says bob left, thanks to our heartbeat. bob's own window says the
-        server is silent. The game goes on for alice and carol.""", 100)
+        prs, 5, "TCP", "Wi-Fi off in the middle of a game",
+        [("Back to TCP, all three press R", "A normal game starts"),
+         ("At 0:40 left, bob turns the Wi-Fi off and keeps the game open",
+          "On the other screens bob stops moving"),
+         ("Wait", "About 5 s later: “bob left”, the game goes on for alice and carol"),
+         ("Look at bob's window", "“server silent for 5 s”")],
+        "with no network there is no FIN; our heartbeat (a PING every second) still catches it in 5 s.",
+        tcp_cmd.replace("alice", "bob") + " · Wi-Fi off from the menu bar",
+        """[Presenter 3] Test 5, back to TCP. At forty seconds left, bob turns the Wi-Fi off but
+        keeps the game open. Nothing crashed, so no operating system closes anything: TCP alone
+        would wait for minutes. bob stops moving, and about five seconds later the server says bob
+        left, thanks to our heartbeat. bob's own window says the server is silent. The game goes
+        on.""", DEMO_SECS[4])
+    extras(prs)
+
+
+def extras(prs):
     s = frame(prs, "If we have time", kicker="Live demo · Extra", kicker_color=GOLD, dark=True)
     extras = [("TCP with 30 % loss", TCP,
                "The server Mac drops 30 % of packets in the kernel (needs sudo).",
