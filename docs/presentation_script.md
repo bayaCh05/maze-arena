@@ -6,18 +6,18 @@ Presenters: Presenter 1 = [Name 1], Presenter 2 = [Name 2], Presenter 3 = [Name 
 
 | Slide | Title | Who | Starts at | Length |
 |---|---|---|---|---|
-| 1 | Maze Arena | Presenter 1 | 0:00 | 55 s |
-| 2 | TCP version: one connection per player | Presenter 2 | 0:55 | 50 s |
-| 3 | UDP version: one socket, our own reliability | Presenter 2 | 1:45 | 55 s |
-| 4 | Many players at once, and players who vanish | Presenter 3 | 2:40 | 60 s |
-| 5 | Our measurements: TCP waits, UDP skips | Presenter 3 | 3:40 | 55 s |
-| 6 | What differs, what hurt, who wins | Presenter 4 | 4:35 | 45 s |
-| 7 | Bonus: players on different networks | Presenter 4 | 5:20 | 60 s |
-| | **Total** | | | **6 min 20 s** |
+| 1 | Maze Arena | Presenter 1 | 0:00 | 60 s |
+| 2 | TCP version: one connection per player | Presenter 2 | 1:00 | 50 s |
+| 3 | UDP version: one socket, our own reliability | Presenter 2 | 1:50 | 55 s |
+| 4 | Many players at once, and players who vanish | Presenter 3 | 2:45 | 60 s |
+| 5 | Our measurements: TCP waits, UDP skips | Presenter 3 | 3:45 | 55 s |
+| 6 | What differs, what hurt, who wins | Presenter 4 | 4:40 | 45 s |
+| 7 | Bonus: players on different networks | Presenter 4 | 5:25 | 60 s |
+| | **Total** | | | **6 min 25 s** |
 
-## Slide 1: Maze Arena (55 s)
+## Slide 1: Maze Arena (60 s)
 
-[Presenter 1] Hello, we are [team]. Our project is Maze Arena, a small multiplayer maze game where up to three players race to eat pellets. We built the same game twice: once over TCP and once over UDP, so we can compare the two protocols on the same workload. The design is simple. One computer runs the server, three computers run a client. The server is authoritative: it alone moves the players and decides who scores, ten times per second. A client sends only a direction, and the server sends the full game state, called STATE, to everyone after each step. The rules live once in the common folder, and both servers use the same code, so any difference we measure comes from the network, not from the game.
+[Presenter 1] Hello, we are [Name 1], [Name 2], [Name 3] and [Name 4]. Our project is Maze Arena, a small multiplayer maze game where up to three players race to eat pellets. We built the same game twice: once over TCP and once over UDP, so we can compare the two protocols on the same workload. The design is simple. One computer runs the server, three computers run a client. The server is authoritative: it alone moves the players and decides who scores, ten times per second. A client sends only a direction, and the server sends the full game state, called STATE, to everyone after each step. The rules live once in the common folder, and both servers use the same code, so any difference we measure comes from the network, not from the game.
 
 > Likely question: Why an authoritative server?
 > Answer: Clients cannot cheat or disagree: only the server changes the game, and every client draws the same STATE.
@@ -47,7 +47,7 @@ Presenters: Presenter 1 = [Name 1], Presenter 2 = [Name 2], Presenter 3 = [Name 
 
 ## Slide 4: Many players at once, and players who vanish (60 s)
 
-[Presenter 3] How do we handle several players at the same time? TCP gives each player a reader and a writer thread; UDP has one receive loop and a timer thread. In both, the game state is protected by one lock. Now disconnections. With TCP, if a client program crashes, its operating system closes the connection, and we saw it in 0–95 ms. But if the Wi-Fi goes off, nothing is sent at all, so TCP alone would wait for minutes: our watchdog drops a silent player after 5 seconds. UDP has no connection, so silence is the only signal: after 4 seconds without a datagram the player is removed; we measured 4.0–4.5 s. Either way the others get PLAYER_LEFT and keep playing, and if only one player is left, the game ends. Our chaos test never crashed either server.
+[Presenter 3] How do we handle several players at the same time? TCP gives each player a reader and a writer thread; UDP has one receive loop and a timer thread. In both, the game state is protected by one lock. Now disconnections. With TCP, if a client program crashes, its operating system closes the connection, and we saw it in 0⁠–⁠95 ms. But if the Wi-Fi goes off, nothing is sent at all, so TCP alone would wait for minutes: our watchdog drops a silent player after 5 seconds. UDP has no connection, so silence is the only signal: after 4 seconds without a datagram the player is removed; we measured 4.0⁠–⁠4.5 s. Either way the others get PLAYER_LEFT and keep playing, and if only one player is left, the game ends. Our chaos test never crashed either server.
 
 > Likely question: Why not a shorter UDP timeout?
 > Answer: Under 30 % loss several PINGs in a row can be lost; 4 s avoids kicking players who are still there.
