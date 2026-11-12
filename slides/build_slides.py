@@ -434,31 +434,33 @@ def s_agenda(prs):
         [[("Our question: ", {"bold": True}),
           ("which transport suits a real-time multiplayer game, and why?", {})]],
         fill=WHITE, line=LINE, size=24, align=PP_ALIGN.LEFT, margin=0.3)
-    parts = [("1", "The game and our design", "3 min", first(1), None),
-             ("2", "The TCP version", "2 min", first(2), TCP),
-             ("3", "The UDP version", "3 min", first(2), UDP),
-             ("4", "Live demo on 4 laptops", "8 min", "everyone", GOLD),
-             ("5", "Results and lessons", "4 min", first(4), None)]
-    bw, gap, y = 2.3, 0.15, 3.05
+    parts = [("1", "Game and design", "3 min", first(1), None),
+             ("2", "TCP version", "2 min", first(2), TCP),
+             ("3", "UDP version", "3 min", first(2), UDP),
+             ("4", "Live demo", "8 min", "everyone", GOLD),
+             ("5", "TCP vs UDP", "2 min", first(1), None),
+             ("6", "Results and lessons", "3 min", first(4), None)]
+    bw, gap, y = 1.89, 0.15, 3.05
     for k, (n, label, mins, by, color) in enumerate(parts):
         x = I(0.6 + k * (bw + gap))
         demo = color is GOLD
-        box(s, x, I(y), I(bw), I(2.5), "", fill=NIGHT if demo else WHITE,
+        box(s, x, I(y), I(bw), I(2.6), "", fill=NIGHT if demo else WHITE,
             line=None if demo else LINE)
         badge(s, x + I(0.25), I(y + 0.3), n, color or INK)
-        text(s, x + I(0.25), I(y + 1.0), I(bw - 0.45), I(0.85), label, size=21, bold=True,
+        text(s, x + I(0.25), I(y + 1.0), I(bw - 0.4), I(0.85), label, size=19, bold=True,
              color=WHITE if demo else INK)
-        text(s, x + I(0.25), I(y + 1.85), I(bw - 0.45), I(0.6),
-             [[(mins, {"bold": True}), ("  ·  " + by, {})]], size=16,
+        text(s, x + I(0.25), I(y + 1.85), I(bw - 0.4), I(0.7),
+             [[(mins, {"bold": True})], [(by, {})]], size=16,
              color=GOLD if demo else MUTED)
     text(s, I(0.6), I(5.95), I(12.1), I(0.5),
-         "First how it works, then we show it live, then the numbers that explain what you saw.",
+         "First how it works, then we show it live, then we compare them and show the numbers.",
          size=20, color=MUTED)
     notes(s, """
 [Presenter 1] Our question is simple: which transport suits a real-time multiplayer game, and
 why? First we present the game and our design, then the TCP version and the UDP version.
-Then the most important part: a live demo on four laptops, with four short games that each
-prove something. We finish with our measurements and what we learned.
+Then the most important part: a live demo on four laptops, with five short tests that each
+prove something. After the demo we compare TCP and UDP side by side, and we finish with our
+measurements and what we learned.
 """)
 
 
@@ -954,14 +956,91 @@ Otherwise we skip this slide.
 """, secs=0)
 
 
-# ---------------------------------------------------------------- part 5: results
+# ---------------------------------------------------------------- part 5: TCP vs UDP
+
+def compare_table(s, rows, name, size=19, row_h=0.66, first_w=2.9):
+    """Topic | TCP | UDP table on paper; rows: (topic, tcp, udp), udp None = same on both."""
+    rest = (12.1 - first_w) / 2
+    tbl = table(s, I(0.6), I(1.75), I(12.1), [I(first_w), I(rest), I(rest)],
+                [I(0.55)] + [I(row_h)] * len(rows), name)
+    cell(tbl.cell(0, 0), "", size, INK, True, None)
+    cell(tbl.cell(0, 1), "TCP", 21, WHITE, True, TCP, PP_ALIGN.CENTER)
+    cell(tbl.cell(0, 2), "UDP", 21, WHITE, True, UDP, PP_ALIGN.CENTER)
+    for k, (topic, t, u) in enumerate(rows, start=1):
+        cell(tbl.cell(k, 0), topic, size, INK, True, WHITE)
+        if u is None:       # the same on both: one cell across TCP and UDP
+            tbl.cell(k, 1).merge(tbl.cell(k, 2))
+            cell(tbl.cell(k, 1), t, size, INK, False, WHITE, PP_ALIGN.CENTER)
+            continue
+        cell(tbl.cell(k, 1), t, size, INK, False, TCP_LIGHT)
+        cell(tbl.cell(k, 2), u, size, INK, False, UDP_LIGHT)
+    return tbl
+
+
+def s_differences(prs):
+    s = frame(prs, "TCP vs UDP: how they differ", kicker="Part 5 · TCP vs UDP",
+              tags=("TCP", "UDP"))
+    compare_table(s, [
+        ("Connection", "Handshake first, like a phone call", "None: each packet travels alone"),
+        ("Messages", "A stream of bytes: we add \\n to separate them", "1 packet = 1 message"),
+        ("Lost packet", "The OS resends it; everything behind it waits",
+         "Gone. We resend only the important ones"),
+        ("Order", "Always in order", "Not guaranteed: we number the important ones"),
+        ("Header", "20 bytes per segment", "8 bytes per packet"),
+    ], "how they differ")
+    text(s, I(0.6), I(6.1), I(12.1), I(0.6),
+         "TCP gives us reliability for free; with UDP we choose what is worth resending.",
+         size=21, bold=True)
+    notes(s, """
+[Presenter 1] Now that you have seen both versions live, let's put the differences side by side.
+TCP opens a connection first, like a phone call; UDP just sends packets that travel alone. TCP
+delivers a stream of bytes, so we had to separate messages with a newline; with UDP one packet is
+one message. When a TCP packet is lost, the operating system resends it and everything behind it
+waits. A lost UDP packet is simply gone, so we resend only the important ones. TCP keeps the
+order; with UDP we number the important messages ourselves. UDP is also lighter: 8 bytes of
+header instead of 20. In short: TCP gives us reliability for free, with UDP we choose what is
+worth resending.
+""", [("Is UDP faster than TCP?",
+       "Without loss, no: both had about 0.9 ms round trip on one machine. The difference appears "
+       "when packets are lost: TCP waits, UDP does not.")])
+
+
+def s_seen(prs, rows):
+    tcp_d = span([num(rows, "tcp", l, "detect_ms") for l in LOSSES])
+    t30 = num(rows, "tcp", 30, "rtt_mean_ms")
+    u30 = num(rows, "udp", 30, "rtt_mean_ms")
+    s = frame(prs, "What the demo showed", kicker="Part 5 · TCP vs UDP", tags=("TCP", "UDP"))
+    compare_table(s, [
+        ("A player crashes", f"Noticed in the same second ({tcp_d}): the OS closes the connection",
+         "Noticed after 4 s of silence"),
+        ("The player logs in again at once", "Accepted", "Refused for 4 s: “name already taken”"),
+        ("Wi-Fi off", "Our heartbeat: dropped after 5 s", "Same idea: dropped after 4 s"),
+        ("30 % of packets lost", f"Nothing lost, but freezes then jumps (round trip {ms(t30)})",
+         f"30 % of updates skipped, never stops (round trip {ms(u30, 1)})"),
+        ("Joining rules, scores, results", "Identical on both: the same server code", None),
+    ], "what the demo showed", size=18, row_h=0.72, first_w=3.0)
+    text(s, I(0.6), I(6.2), I(12.1), I(0.6),
+         "The game is the same; only the behaviour of the network changes.", size=21, bold=True)
+    notes(s, f"""
+[Presenter 1] And this is what you just saw in the demo. When a player crashed, TCP knew in the
+same second, because the operating system closed the connection; UDP needed four seconds of
+silence. That is also why carol could log in again at once on TCP, but was refused for four
+seconds on UDP. With the Wi-Fi off, both rely on our heartbeat. With thirty percent loss, UDP
+skipped about a third of the updates but never stopped, while TCP, in our measurements, loses
+nothing but freezes, with a round trip of {ms(t30)}. And everything else, the rules, the scores,
+the results, is identical, because both use the same server code. [Presenter 4] now shows the
+numbers behind this.
+""")
+
+
+# ---------------------------------------------------------------- part 6: results
 
 HOW = ("How we measured: 3 bots, 120 s games on one Mac, loss added on purpose "
        "(TCP: by the kernel, UDP: by our --drop option).")
 
 
 def s_rtt(prs, rows):
-    s = frame(prs, "Under loss, TCP waits and UDP doesn't", kicker="Part 5 · Results",
+    s = frame(prs, "Under loss, TCP waits and UDP doesn't", kicker="Part 6 · Results",
               tags=("TCP", "UDP"))
     tv = [num(rows, "tcp", l, "rtt_mean_ms") for l in LOSSES]
     uv = [num(rows, "udp", l, "rtt_mean_ms") for l in LOSSES]
@@ -992,7 +1071,7 @@ until it is resent. That is called head-of-line blocking. At thirty percent loss
 
 
 def s_lost(prs, rows):
-    s = frame(prs, "UDP skips lost updates, TCP freezes", kicker="Part 5 · Results",
+    s = frame(prs, "UDP skips lost updates, TCP freezes", kicker="Part 6 · Results",
               tags=("TCP", "UDP"))
     lost_t = [num(rows, "tcp", l, "states_missing_pct") for l in LOSSES]
     lost_u = [num(rows, "udp", l, "states_missing_pct") for l in LOSSES]
@@ -1020,7 +1099,7 @@ better than waiting for it.
 
 
 def s_detect(prs, rows):
-    s = frame(prs, "How fast a crashed player is noticed", kicker="Part 5 · Results",
+    s = frame(prs, "How fast a crashed player is noticed", kicker="Part 6 · Results",
               tags=("TCP", "UDP"))
     tcp_d = span([num(rows, "tcp", l, "detect_ms") for l in LOSSES])
     udp_d = span([num(rows, "udp", l, "detect_ms") for l in LOSSES], seconds=True)
@@ -1055,7 +1134,7 @@ important messages that were lost were resent, and none was given up.
 
 
 def s_wins(prs):
-    s = frame(prs, "Who wins? It depends on the message", kicker="Part 5 · Lessons",
+    s = frame(prs, "Who wins? It depends on the message", kicker="Part 6 · Lessons",
               tags=("TCP", "UDP"))
     cards = [("TCP is best for", TCP, TCP_LIGHT,
               ["Lobby, rooms, results: everything must arrive",
@@ -1087,7 +1166,7 @@ we did: UDP for live data, plus a small reliable layer for the rest.
 
 
 def s_hard(prs):
-    s = frame(prs, "What was hard", kicker="Part 5 · Lessons")
+    s = frame(prs, "What was hard", kicker="Part 6 · Lessons")
     cards = [("TCP", TCP, "One recv() is not one message",
               "We added line framing and tested split and merged messages."),
              ("UDP", UDP, "Building seq, ACK and resend",
@@ -1116,7 +1195,7 @@ talking to each other. That is why we check the network with a small tool before
 
 
 def s_bonus(prs, paths):
-    s = frame(prs, "Bonus: players on different networks", kicker="Part 5 · Bonus",
+    s = frame(prs, "Bonus: players on different networks", kicker="Part 6 · Bonus",
               tags=("TCP", "UDP"))
     rows = [("TCP", TCP, ["player", "Cloudflare\n(internet)", "tunnel opened\nby the server",
                           "TCP server\n:5050"]),
@@ -1219,6 +1298,8 @@ def build():
     s_vanish(prs, rows)
     s_demo_plan(prs)
     s_demos(prs)
+    s_differences(prs)
+    s_seen(prs, rows)
     s_rtt(prs, rows)
     s_lost(prs, rows)
     s_detect(prs, rows)

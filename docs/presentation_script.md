@@ -7,41 +7,43 @@ Presenters: Presenter 1 = Baya Chaabene, Presenter 2 = Mohamed Aziz Souissi, Pre
 | Slide | Title | Who | Starts at | Length |
 |---|---|---|---|---|
 | 1 | Maze Arena | Baya Chaabene | 0:00 | 35 s |
-| 2 | Our 20 minutes | Baya Chaabene | 0:35 | 25 s |
-| 3 | The game in 30 seconds | Baya Chaabene | 1:00 | 35 s |
-| 4 | One server, three players | Baya Chaabene | 1:35 | 30 s |
-| 5 | A game, message by message | Baya Chaabene | 2:05 | 35 s |
-| 6 | Same game, only the transport changes | Baya Chaabene | 2:40 | 30 s |
-| 7 | TCP: one connection per player | Mohamed Aziz Souissi | 3:10 | 35 s |
-| 8 | TCP delivers bytes, not messages | Mohamed Aziz Souissi | 3:45 | 35 s |
-| 9 | UDP: one socket for everyone | Mohamed Aziz Souissi | 4:20 | 35 s |
-| 10 | Lost packets: we built our own safety net | Mohamed Aziz Souissi | 4:55 | 35 s |
-| 11 | Not every message has to arrive | Mohamed Aziz Souissi | 5:30 | 35 s |
-| 12 | When a player disappears | Mohamed Aziz Souissi | 6:05 | 45 s |
-| 13 | Live demo: 5 short tests on 4 laptops | Yassine Friaa | 6:50 | 40 s |
-| 14 | Joining rules: the server says no | Yassine Friaa | 7:30 | 80 s |
-| 15 | Playing, then a crash | Yassine Friaa | 8:50 | 100 s |
-| 16 | The same game over UDP, then a crash | Yassine Friaa | 10:30 | 110 s |
-| 17 | UDP with 30 % of packets lost | Yassine Friaa | 12:20 | 100 s |
-| 18 | Wi-Fi off in the middle of a game | Yassine Friaa | 14:00 | 90 s |
-| 19 | If we have time | Yassine Friaa | 15:30 | skip if late |
-| 20 | Under loss, TCP waits and UDP doesn't | Yahia Mahfoudh | 15:30 | 30 s |
-| 21 | UDP skips lost updates, TCP freezes | Yahia Mahfoudh | 16:00 | 30 s |
-| 22 | How fast a crashed player is noticed | Yahia Mahfoudh | 16:30 | 25 s |
-| 23 | Who wins? It depends on the message | Yahia Mahfoudh | 16:55 | 35 s |
-| 24 | What was hard | Yahia Mahfoudh | 17:30 | 35 s |
-| 25 | Bonus: players on different networks | Yahia Mahfoudh | 18:05 | 30 s |
-| 26 | What we take away | Yahia Mahfoudh | 18:35 | 25 s |
-| | **Total** | | | **19 min 00 s** |
+| 2 | Our 20 minutes | Baya Chaabene | 0:35 | 30 s |
+| 3 | The game in 30 seconds | Baya Chaabene | 1:05 | 35 s |
+| 4 | One server, three players | Baya Chaabene | 1:40 | 30 s |
+| 5 | A game, message by message | Baya Chaabene | 2:10 | 35 s |
+| 6 | Same game, only the transport changes | Baya Chaabene | 2:45 | 30 s |
+| 7 | TCP: one connection per player | Mohamed Aziz Souissi | 3:15 | 35 s |
+| 8 | TCP delivers bytes, not messages | Mohamed Aziz Souissi | 3:50 | 35 s |
+| 9 | UDP: one socket for everyone | Mohamed Aziz Souissi | 4:25 | 35 s |
+| 10 | Lost packets: we built our own safety net | Mohamed Aziz Souissi | 5:00 | 35 s |
+| 11 | Not every message has to arrive | Mohamed Aziz Souissi | 5:35 | 35 s |
+| 12 | When a player disappears | Mohamed Aziz Souissi | 6:10 | 45 s |
+| 13 | Live demo: 5 short tests on 4 laptops | Yassine Friaa | 6:55 | 40 s |
+| 14 | Joining rules: the server says no | Yassine Friaa | 7:35 | 80 s |
+| 15 | Playing, then a crash | Yassine Friaa | 8:55 | 100 s |
+| 16 | The same game over UDP, then a crash | Yassine Friaa | 10:35 | 110 s |
+| 17 | UDP with 30 % of packets lost | Yassine Friaa | 12:25 | 100 s |
+| 18 | Wi-Fi off in the middle of a game | Yassine Friaa | 14:05 | 90 s |
+| 19 | If we have time | Yassine Friaa | 15:35 | skip if late |
+| 20 | TCP vs UDP: how they differ | Baya Chaabene | 15:35 | 55 s |
+| 21 | What the demo showed | Baya Chaabene | 16:30 | 50 s |
+| 22 | Under loss, TCP waits and UDP doesn't | Yahia Mahfoudh | 17:20 | 30 s |
+| 23 | UDP skips lost updates, TCP freezes | Yahia Mahfoudh | 17:50 | 30 s |
+| 24 | How fast a crashed player is noticed | Yahia Mahfoudh | 18:20 | 25 s |
+| 25 | Who wins? It depends on the message | Yahia Mahfoudh | 18:45 | 35 s |
+| 26 | What was hard | Yahia Mahfoudh | 19:20 | 35 s |
+| 27 | Bonus: players on different networks | Yahia Mahfoudh | 19:55 | 30 s |
+| 28 | What we take away | Yahia Mahfoudh | 20:25 | 25 s |
+| | **Total** | | | **20 min 50 s** |
 
 ## Slide 1: Maze Arena (35 s)
 
 [Baya Chaabene] Hello, we are Baya Chaabene, Mohamed Aziz Souissi, Yassine Friaa and Yahia Mahfoudh. This is Maze Arena: a multiplayer maze game for up to three players. We built the same game twice, once over TCP and once over UDP, so that we could compare the two protocols on exactly the same game. In the next twenty minutes we explain how both versions work, we show them live on four laptops, and we show what we measured.
 
 
-## Slide 2: Our 20 minutes (25 s)
+## Slide 2: Our 20 minutes (30 s)
 
-[Baya Chaabene] Our question is simple: which transport suits a real-time multiplayer game, and why? First we present the game and our design, then the TCP version and the UDP version. Then the most important part: a live demo on four laptops, with four short games that each prove something. We finish with our measurements and what we learned.
+[Baya Chaabene] Our question is simple: which transport suits a real-time multiplayer game, and why? First we present the game and our design, then the TCP version and the UDP version. Then the most important part: a live demo on four laptops, with five short tests that each prove something. After the demo we compare TCP and UDP side by side, and we finish with our measurements and what we learned.
 
 
 ## Slide 3: The game in 30 seconds (35 s)
@@ -145,7 +147,19 @@ Presenters: Presenter 1 = Baya Chaabene, Presenter 2 = Mohamed Aziz Souissi, Pre
 [Yassine Friaa] Only if we are ahead of time. First, TCP with thirty percent loss, made by the operating system: the game freezes and then jumps, because one lost packet holds back everything behind it. Second, a player on a phone hotspot joins through our Cloudflare tunnel. Otherwise we skip this slide.
 
 
-## Slide 20: Under loss, TCP waits and UDP doesn't (30 s)
+## Slide 20: TCP vs UDP: how they differ (55 s)
+
+[Baya Chaabene] Now that you have seen both versions live, let's put the differences side by side. TCP opens a connection first, like a phone call; UDP just sends packets that travel alone. TCP delivers a stream of bytes, so we had to separate messages with a newline; with UDP one packet is one message. When a TCP packet is lost, the operating system resends it and everything behind it waits. A lost UDP packet is simply gone, so we resend only the important ones. TCP keeps the order; with UDP we number the important messages ourselves. UDP is also lighter: 8 bytes of header instead of 20. In short: TCP gives us reliability for free, with UDP we choose what is worth resending.
+
+> Likely question: Is UDP faster than TCP?
+> Answer: Without loss, no: both had about 0.9 ms round trip on one machine. The difference appears when packets are lost: TCP waits, UDP does not.
+
+## Slide 21: What the demo showed (50 s)
+
+[Baya Chaabene] And this is what you just saw in the demo. When a player crashed, TCP knew in the same second, because the operating system closed the connection; UDP needed four seconds of silence. That is also why carol could log in again at once on TCP, but was refused for four seconds on UDP. With the Wi-Fi off, both rely on our heartbeat. With thirty percent loss, UDP skipped about a third of the updates but never stopped, while TCP, in our measurements, loses nothing but freezes, with a round trip of 199 ms. And everything else, the rules, the scores, the results, is identical, because both use the same server code. [Yahia Mahfoudh] now shows the numbers behind this.
+
+
+## Slide 22: Under loss, TCP waits and UDP doesn't (30 s)
 
 [Yahia Mahfoudh] Now our measurements. We ran three bots for two minutes, with zero, ten and thirty percent of packets lost on purpose. This chart is the round-trip time. Without loss both are under one millisecond. With loss, TCP waits: when one packet is lost, everything behind it waits until it is resent. That is called head-of-line blocking. At thirty percent loss TCP needs 199 ms; UDP stays at 0.9 ms, because it never waits.
 
@@ -155,38 +169,38 @@ Presenters: Presenter 1 = Baya Chaabene, Presenter 2 = Mohamed Aziz Souissi, Pre
 > Likely question: Why measure on one Mac?
 > Answer: It removes Wi-Fi noise, so the only difference is the loss we add on purpose.
 
-## Slide 21: UDP skips lost updates, TCP freezes (30 s)
+## Slide 23: UDP skips lost updates, TCP freezes (30 s)
 
 [Yahia Mahfoudh] The other side of the story. Left: TCP never loses an update, zero percent at any loss. UDP skips the lost ones: about ten and thirty percent, exactly the loss we added. Right: freezes, moments of more than a quarter second without a new picture. TCP freezes much more often, because it waits for every lost packet. So for a live game, skipping an old picture is better than waiting for it.
 
 
-## Slide 22: How fast a crashed player is noticed (25 s)
+## Slide 24: How fast a crashed player is noticed (25 s)
 
 [Yahia Mahfoudh] How fast is a crashed player noticed? With TCP, 0⁠–⁠95 ms: the operating system closes the connection. With UDP, 4.0⁠–⁠4.5 s: we have to wait for four seconds of silence. This is the price of having no connection. And our safety net works: at thirty percent loss, the important messages that were lost were resent, and none was given up.
 
 
-## Slide 23: Who wins? It depends on the message (35 s)
+## Slide 25: Who wins? It depends on the message (35 s)
 
 [Yahia Mahfoudh] So which one is better? It depends on the message. TCP is best when everything must arrive: the lobby, the rooms, the results. It is simple, notices crashes immediately and passes firewalls easily. UDP is best for the live game when packets are lost, because it never waits for an old picture, but we had to build reliability ourselves. Real online games do what we did: UDP for live data, plus a small reliable layer for the rest.
 
 > Likely question: If you started again, which one would you choose?
 > Answer: UDP for the game data and our reliable layer for the lobby, like we did, because the game only needs the newest STATE.
 
-## Slide 24: What was hard (35 s)
+## Slide 26: What was hard (35 s)
 
 [Yahia Mahfoudh] What was hard? With TCP, understanding that one recv is not one message. With UDP, building sequence numbers, ACKs and resends ourselves, and testing them under loss. For both, choosing the timeout: too short and players on bad Wi-Fi get kicked, too long and a dead player stays in the game. And real networks: firewalls, and campus Wi-Fi that blocks laptops from talking to each other. That is why we check the network with a small tool before playing.
 
 > Likely question: What happens if STATE grows past the safe UDP size?
 > Answer: IP would split the packet and losing one piece loses the whole STATE. Ours is 1228 bytes, under the ~1472-byte limit; we warn above 1200.
 
-## Slide 25: Bonus: players on different networks (30 s)
+## Slide 27: Bonus: players on different networks (30 s)
 
 [Yahia Mahfoudh] The bonus: players on different networks. Routers block connections that come in from outside, and we cannot change campus or hotspot routers. So the server dials out. For TCP a Cloudflare tunnel carries the traffic from a remote player to our server. Cloudflare does not carry UDP, so for UDP we use a relay called playit. The TCP path works; the UDP tunnel is not set up yet.
 
 > Likely question: Why not just open port 5050 on the router?
 > Answer: We do not control campus or hotspot routers, and many use carrier NAT; an outgoing tunnel works everywhere.
 
-## Slide 26: What we take away (25 s)
+## Slide 28: What we take away (25 s)
 
 [Yahia Mahfoudh] To conclude. TCP is reliable and simple, but one lost packet makes everything wait. UDP never gets stuck on an old packet, but we have to decide ourselves what to resend. For a live game, UDP with a small reliable layer gives the best of both. Thank you, we are happy to answer your questions.
 

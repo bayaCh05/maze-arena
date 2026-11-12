@@ -113,7 +113,7 @@ S runs `bash scripts/deploy_start.sh`; one teammate on a phone hotspot runs `bas
 (Windows `scripts\join_tcp.bat`).
 - [ ] `curl -4 ifconfig.me` on that laptop shows a different public IP than S.
 - [ ] The game works; RTT higher than on the Wi-Fi.
-- [ ] If it fails in the morning check, skip it live (slide 25 covers it).
+- [ ] If it fails in the morning check, skip it live (slide 27 covers it).
 
 ---
 
@@ -125,4 +125,4 @@ S runs `bash scripts/deploy_start.sh`; one teammate on a phone hotspot runs `bas
 | "name already taken" when nobody else uses it | The server still holds the old session: wait 5 s (TCP) / 4 s (UDP) and log in again |
 | Port 5050 busy on S | `lsof -nP -i :5050`, stop the old server; or `--port 5051` everywhere |
 | Running late | Skip test 5 and the extras; slide 12 explains the Wi-Fi case |
-| Nothing works | Show the measured numbers (slides 20-22) |
+| Nothing works | Show the measured numbers (slides 22-24) |
