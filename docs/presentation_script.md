@@ -99,7 +99,7 @@ Presenters: Presenter 1 = Baya Chaabene, Presenter 2 = Mohamed Aziz Souissi, Pre
 
 ## Slide 11: Live demo: 3 tests on 4 laptops (45 s)
 
-[Yahia Mahfoudh] Now the live demo: three short tests. For each one the slide says what we do and what you should see, so you can check it with us. Test 1 is a normal TCP game where we crash a player. Test 2 is the same over UDP. Test 3 throws away thirty percent of the packets. [Presenter 4] runs the server PC; its log and Wireshark are on the projector, so you see every event with its time. The four laptops are in one Tailscale network: a private network on top of the Wi-Fi, so it works even when the Wi-Fi blocks laptops from talking to each other.
+[Yahia Mahfoudh] Now the live demo: three short tests. For each one the slide says what we do and what you should see, so you can check it with us. Test 1 is a normal TCP game where we crash a player. Test 2 is the same over UDP. Test 3 throws away thirty percent of the packets. [Yassine Friaa] runs the server PC; its log and Wireshark are on the projector, so you see every event with its time. The four laptops are in one Tailscale network: a private network on top of the Wi-Fi, so it works even when the Wi-Fi blocks laptops from talking to each other.
 
 > Likely question: Does Tailscale change the results?
 > Answer: It wraps every packet, TCP or UDP, in an encrypted WireGuard UDP packet, so the path adds a few ms. Inside, our TCP is still TCP and our UDP is still UDP; our 1.2 KB STATE fits Tailscale's 1280-byte MTU.
