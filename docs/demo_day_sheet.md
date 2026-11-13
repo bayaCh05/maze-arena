@@ -1,5 +1,9 @@
 # Demo day sheet: Fri 13 Nov 2026
 
+> **Today's live demo (13 Nov) follows [demo_scenarios.md](demo_scenarios.md)**: server on Yassine's
+> PC over Tailscale (`100.66.86.49`), TCP port 5050, UDP port **5051**, players Baya, Yahia, Aziz.
+> This file is the general LAN / cross-network reference.
+
 Port **5050** everywhere (TCP and UDP). Every laptop: `cd maze-arena`, venv active
 (macOS `source .venv/bin/activate` · Windows `.venv\Scripts\Activate.ps1`), `git pull` done.
 `S_IP` = the address the server prints at startup. `maze.<domain>` = the Cloudflare Tunnel hostname

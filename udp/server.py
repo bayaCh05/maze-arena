@@ -211,7 +211,7 @@ def main():
     parser.add_argument("--host", default="0.0.0.0")
     parser.add_argument("--port", type=int, default=5050)
     parser.add_argument("--game-seconds", type=float, default=game.GAME_TICKS / game.TICK_RATE,
-                        help="game length (default 120)")
+                        help=f"game length in seconds (default {game.GAME_TICKS // game.TICK_RATE})")
     parser.add_argument("--heartbeat-timeout", type=float, default=HEARTBEAT_TIMEOUT)
     parser.add_argument("--drop", type=float, default=0.0,
                         help="fraction of OUTGOING datagrams to drop (loss simulation)")

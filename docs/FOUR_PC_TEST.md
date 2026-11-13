@@ -1,5 +1,9 @@
 # 4-computer test: 1 server + 3 clients
 
+> **Today's live demo (13 Nov) follows [demo_scenarios.md](demo_scenarios.md)**: server on Yassine's
+> PC over Tailscale (`100.66.86.49`), TCP port 5050, UDP port **5051**, players Baya, Yahia, Aziz.
+> This file is the general LAN / cross-network reference.
+
 A script for 4 people on 4 laptops, to run **before** the demo so it works the first time.
 About 30 minutes. Tick each box as you go; if a check fails, stop and look at
 [Common problems](#common-problems-going-from-2-to-4-machines).

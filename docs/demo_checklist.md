@@ -1,5 +1,9 @@
 # Demo checklist: Friday 13 November 2026
 
+> **Today's live demo (13 Nov) follows [demo_scenarios.md](demo_scenarios.md)**: server on Yassine's
+> PC over Tailscale (`100.66.86.49`), TCP port 5050, UDP port **5051**, players Baya, Yahia, Aziz.
+> This file is the general LAN / cross-network reference.
+
 4 computers: **S** = server, **A**, **B**, **C** = players (alice, bob, carol).
 Port **5050** for both TCP and UDP. All commands run from the repo root
 (`cd maze-arena && source .venv/bin/activate`; Windows: `.venv\Scripts\activate`).
