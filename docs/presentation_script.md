@@ -9,27 +9,28 @@ Presenters: Presenter 1 = Baya Chaabene, Presenter 2 = Mohamed Aziz Souissi, Pre
 | 1 | Maze Arena | Baya Chaabene | 0:00 | 35 s |
 | 2 | The game in 30 seconds | Baya Chaabene | 0:35 | 35 s |
 | 3 | One server, three players | Baya Chaabene | 1:10 | 30 s |
-| 4 | Same game, only the transport changes | Baya Chaabene | 1:40 | 30 s |
-| 5 | TCP: one connection per player | Mohamed Aziz Souissi | 2:10 | 35 s |
-| 6 | TCP delivers bytes, not messages | Mohamed Aziz Souissi | 2:45 | 35 s |
-| 7 | UDP: one socket for everyone | Mohamed Aziz Souissi | 3:20 | 35 s |
-| 8 | Lost packets: we built our own safety net | Mohamed Aziz Souissi | 3:55 | 35 s |
-| 9 | Not every message has to arrive | Mohamed Aziz Souissi | 4:30 | 35 s |
-| 10 | When a player disappears | Mohamed Aziz Souissi | 5:05 | 45 s |
-| 11 | Live demo: 3 tests on 4 laptops | Yahia Mahfoudh | 5:50 | 45 s |
-| 12 | What Wireshark shows | Yahia Mahfoudh | 6:35 | 50 s |
-| 13 | TCP: a normal game, then a crash | Yahia Mahfoudh | 7:25 | 150 s |
-| 14 | UDP: the same game, then a crash | Yahia Mahfoudh | 9:55 | 150 s |
-| 15 | UDP with 30 % of packets lost | Yahia Mahfoudh | 12:25 | 140 s |
-| 16 | If we have time | Yahia Mahfoudh | 14:45 | skip if late |
-| 17 | TCP vs UDP: how they differ | Baya Chaabene | 14:45 | 55 s |
-| 18 | What the demo showed | Baya Chaabene | 15:40 | 50 s |
-| 19 | Who wins? It depends on the message | Yassine Friaa | 16:30 | 35 s |
-| 20 | What we take away | Yassine Friaa | 17:05 | 25 s |
-| 21 | Under loss, TCP waits and UDP doesn't | Yassine Friaa | 17:30 | backup, for questions |
-| 22 | UDP skips lost updates, TCP freezes | Yassine Friaa | 17:30 | backup, for questions |
-| 23 | How fast a crashed player is noticed | Yassine Friaa | 17:30 | backup, for questions |
-| | **Total** | | | **17 min 30 s** |
+| 4 | How the 4 laptops reach each other: Tailscale | Baya Chaabene | 1:40 | 40 s |
+| 5 | Same game, only the transport changes | Baya Chaabene | 2:20 | 30 s |
+| 6 | TCP: one connection per player | Mohamed Aziz Souissi | 2:50 | 35 s |
+| 7 | TCP delivers bytes, not messages | Mohamed Aziz Souissi | 3:25 | 35 s |
+| 8 | UDP: one socket for everyone | Mohamed Aziz Souissi | 4:00 | 35 s |
+| 9 | Lost packets: we built our own safety net | Mohamed Aziz Souissi | 4:35 | 35 s |
+| 10 | Not every message has to arrive | Mohamed Aziz Souissi | 5:10 | 35 s |
+| 11 | When a player disappears | Mohamed Aziz Souissi | 5:45 | 45 s |
+| 12 | Live demo: 3 tests on 4 laptops | Yahia Mahfoudh | 6:30 | 45 s |
+| 13 | What Wireshark shows | Yahia Mahfoudh | 7:15 | 50 s |
+| 14 | TCP: a normal game, then a crash | Yahia Mahfoudh | 8:05 | 150 s |
+| 15 | UDP: the same game, then a crash | Yahia Mahfoudh | 10:35 | 150 s |
+| 16 | UDP with 30 % of packets lost | Yahia Mahfoudh | 13:05 | 140 s |
+| 17 | If we have time | Yahia Mahfoudh | 15:25 | skip if late |
+| 18 | TCP vs UDP: how they differ | Baya Chaabene | 15:25 | 55 s |
+| 19 | What the demo showed | Baya Chaabene | 16:20 | 50 s |
+| 20 | Who wins? It depends on the message | Yassine Friaa | 17:10 | 35 s |
+| 21 | What we take away | Yassine Friaa | 17:45 | 25 s |
+| 22 | Under loss, TCP waits and UDP doesn't | Yassine Friaa | 18:10 | backup, for questions |
+| 23 | UDP skips lost updates, TCP freezes | Yassine Friaa | 18:10 | backup, for questions |
+| 24 | How fast a crashed player is noticed | Yassine Friaa | 18:10 | backup, for questions |
+| | **Total** | | | **18 min 10 s** |
 
 ## Slide 1: Maze Arena (35 s)
 
@@ -48,14 +49,24 @@ Presenters: Presenter 1 = Baya Chaabene, Presenter 2 = Mohamed Aziz Souissi, Pre
 > Likely question: Why send the whole game instead of only the changes?
 > Answer: If one STATE is lost, the next one is complete again, so UDP can simply skip a lost one.
 
-## Slide 4: Same game, only the transport changes (30 s)
+## Slide 4: How the 4 laptops reach each other: Tailscale (40 s)
+
+[Baya Chaabene] How do our four laptops reach each other? Campus Wi-Fi often blocks laptops from talking to each other, so we use Tailscale. It gives every laptop a private address starting with 100: the server, on Yassine's PC, is 100.66.86.49, TCP on port 5050 and UDP on port 5051. On the Wi-Fi, each of our packets travels inside an encrypted WireGuard tunnel, which is itself UDP. But inside the tunnel nothing changes: our TCP is still TCP, our UDP is still UDP, with the same JSON messages. So the comparison stays fair.
+
+> Likely question: Does Tailscale change the results?
+> Answer: It adds a few ms for encryption and the path. Inside, TCP still resends and waits, UDP still skips; our 1.2 KB STATE fits Tailscale's 1280-byte packets.
+>
+> Likely question: Do the laptops talk directly?
+> Answer: Usually yes, peer to peer; if the network blocks it, Tailscale relays through its DERP servers. tailscale status shows which.
+
+## Slide 5: Same game, only the transport changes (30 s)
 
 [Baya Chaabene] To compare fairly, everything that is not networking is written once, in the common folder: the rules, the lobby and rooms, the game loop and the message format. The TCP folder and the UDP folder only move bytes. One test even checks that both versions deliver exactly the same messages. So any difference you see today comes from the network, not from the game. Now [Mohamed Aziz Souissi] presents the TCP version.
 
 > Likely question: How do you know both versions behave the same?
 > Answer: A parity test plays the same session on TCP and UDP and checks that the messages are identical; 118 automated tests in total.
 
-## Slide 5: TCP: one connection per player (35 s)
+## Slide 6: TCP: one connection per player (35 s)
 
 [Mohamed Aziz Souissi] TCP works like a phone call: you connect first, then you talk. The server opens a listening socket on port 5050. For each player, accept gives a new socket, just for that player, and we start two threads: a reader that receives and a writer that sends from a queue. So one slow player never blocks the others. TCP does a lot for us: it resends lost data and keeps everything in order.
 
@@ -65,17 +76,17 @@ Presenters: Presenter 1 = Baya Chaabene, Presenter 2 = Mohamed Aziz Souissi, Pre
 > Likely question: Why TCP_NODELAY?
 > Answer: Without it TCP may hold small messages to group them, which delays our 10 STATEs per second.
 
-## Slide 6: TCP delivers bytes, not messages (35 s)
+## Slide 7: TCP delivers bytes, not messages (35 s)
 
 [Mohamed Aziz Souissi] The tricky part of TCP: it delivers a stream of bytes, not messages. One recv can return half a message, or three messages glued together. Here the first recv ends in the middle of the word PING. Our fix: every message is one line of JSON ending with a newline. We keep a buffer and only cut at newlines. We tested messages split in two, merged, and even one byte at a time.
 
 
-## Slide 7: UDP: one socket for everyone (35 s)
+## Slide 8: UDP: one socket for everyone (35 s)
 
 [Mohamed Aziz Souissi] UDP works like sending postcards: there is no connection, every packet travels alone. The server has one single socket for all players and reads it in one loop. Each packet carries the sender's address, so we keep a table from address to player. One packet is one message, so no cutting is needed. But nothing is guaranteed: a packet can be lost, arrive twice, or arrive out of order. That is our job now.
 
 
-## Slide 8: Lost packets: we built our own safety net (35 s)
+## Slide 9: Lost packets: we built our own safety net (35 s)
 
 [Mohamed Aziz Souissi] So we built our own safety net. Every important message gets a number, here JOIN number 7. The receiver answers ACK 7: got it. If no ACK comes back within 200 milliseconds, the sender sends it again, up to fifteen times. If a copy arrives twice, the receiver sees the same number and ignores it, and messages are delivered in order. Our tests at 30 percent loss check that every important message arrives exactly once and in order.
 
@@ -85,79 +96,79 @@ Presenters: Presenter 1 = Baya Chaabene, Presenter 2 = Mohamed Aziz Souissi, Pre
 > Likely question: What if all 15 resends fail?
 > Answer: The message is given up and the 4 s heartbeat removes that player. At 30 % loss, 0 were given up.
 
-## Slide 9: Not every message has to arrive (35 s)
+## Slide 10: Not every message has to arrive (35 s)
 
 [Mohamed Aziz Souissi] The key idea of our UDP version: not every message has to arrive. Lobby messages and game events must arrive, so they use our safety net. But STATE, the picture of the game, is sent ten times per second. If one is lost, the next one arrives 100 milliseconds later and is complete. Resending the old one would only add delay. So STATE, INPUT and PING are sent once and never resent. TCP cannot make this choice: it resends everything.
 
 
-## Slide 10: When a player disappears (45 s)
+## Slide 11: When a player disappears (45 s)
 
 [Mohamed Aziz Souissi] Last design question: what if a player disappears? If the game program crashes on a TCP laptop, its operating system closes the connection for it, so the server knows almost immediately: we measured 0⁠–⁠95 ms. With UDP there is no connection to close, so the only signal is silence: after 4 seconds without any packet, the player is removed. If the Wi-Fi goes off, even TCP gets nothing, so we added a heartbeat: every player sends a PING each second. In every case the others see that the player left, and the game goes on. Now [Yahia Mahfoudh] shows all of this live.
 
 > Likely question: Why not a shorter UDP timeout?
 > Answer: At 30 % loss several PINGs in a row can be lost; 4 s avoids kicking players who are still there.
 
-## Slide 11: Live demo: 3 tests on 4 laptops (45 s)
+## Slide 12: Live demo: 3 tests on 4 laptops (45 s)
 
-[Yahia Mahfoudh] Now the live demo: three short tests. For each one the slide says what we do and what you should see, so you can check it with us. Test 1 is a normal TCP game where we crash a player. Test 2 is the same over UDP. Test 3 throws away thirty percent of the packets. [Yassine Friaa] runs the server PC; its log and Wireshark are on the projector, so you see every event with its time. The four laptops are in one Tailscale network: a private network on top of the Wi-Fi, so it works even when the Wi-Fi blocks laptops from talking to each other.
+[Yahia Mahfoudh] Now the live demo: three short tests. For each one the slide says what we do and what you should see, so you can check it with us. Test 1 is a normal TCP game where we crash a player. Test 2 is the same over UDP. Test 3 throws away thirty percent of the packets. [Yassine Friaa] runs the server PC; its log and Wireshark are on the projector, so you see every event with its time. As [Baya Chaabene] showed, the four laptops reach each other through Tailscale.
 
 > Likely question: Does Tailscale change the results?
 > Answer: It wraps every packet, TCP or UDP, in an encrypted WireGuard UDP packet, so the path adds a few ms. Inside, our TCP is still TCP and our UDP is still UDP; our 1.2 KB STATE fits Tailscale's 1280-byte MTU.
 
-## Slide 12: What Wireshark shows (50 s)
+## Slide 13: What Wireshark shows (50 s)
 
 [Yahia Mahfoudh] During the tests Wireshark runs on the server. With TCP you will see the handshake, SYN, SYN-ACK, ACK, when a player connects, our JSON lines inside the stream, and a FIN when we crash Aziz's game. TCP's acknowledgements are added by the operating system. With UDP there is no handshake at all: the very first packet is already the LOGIN. Each datagram is one message, and the ACKs you see are our own messages, written by our code. We capture on the Tailscale interface, because on the Wi-Fi everything is encrypted.
 
 > Likely question: Why do you see FIN and not RST, or the other way round?
 > Answer: When a program dies the OS closes its socket: FIN if nothing was left unread, RST if data was still waiting. Our server treats both as 'player left'.
 
-## Slide 13: TCP: a normal game, then a crash (150 s)
+## Slide 14: TCP: a normal game, then a crash (150 s)
 
 [Yahia Mahfoudh] Test 1, TCP. [Yassine Friaa] starts the TCP server. First Aziz tries to log in as Baya, who is already in: refused, the name is taken; the server checks it. Then the three of us join room demo and press R. Look at the log: three connections from three different addresses, and in Wireshark the handshake for each one. Same maze, same scores on every screen, and a round trip of a few milliseconds in the corner. At forty seconds left Aziz closes the terminal of the game, with no goodbye. The log shows Aziz left in the same second, and Wireshark shows the FIN: Aziz's operating system closed the TCP connection. Baya and Yahia play on and get the same ranking.
 
 
-## Slide 14: UDP: the same game, then a crash (150 s)
+## Slide 15: UDP: the same game, then a crash (150 s)
 
 [Yahia Mahfoudh] Test 2, the same game over UDP, on port 5051. The log now says NEW PEER instead of CONNECT: there is no connection, the server just sees packets from a new address. In Wireshark there is no handshake: the first packet is already the LOGIN, and the ACKs are our own messages. The corner shows zero percent of updates lost. At forty seconds left Aziz closes the terminal again. This time nothing happens at first: there is no connection to close. Count with me: after about four seconds of silence, the server removes Aziz.
 
 
-## Slide 15: UDP with 30 % of packets lost (140 s)
+## Slide 16: UDP with 30 % of packets lost (140 s)
 
 [Yahia Mahfoudh] Test 3: the server now throws away thirty percent of everything it sends, on purpose. Logging in, joining and ready still work, maybe after a short pause: these messages use our safety net, and you can see the RETRANSMIT lines in the log. During the game the corner shows about thirty percent of updates lost. The players jump a bit, but the game never stops and nobody is kicked, because we never wait for an old picture. At the end [Yassine Friaa] stops the server: the statistics show about thirty percent dropped, the resends, and zero messages given up.
 
 
-## Slide 16: If we have time (skip if late)
+## Slide 17: If we have time (skip if late)
 
 [Yahia Mahfoudh] Only if we are ahead of time. First, Aziz turns the Wi-Fi off during a TCP game. Nothing crashed, so no FIN is sent: TCP alone would wait for minutes, but our heartbeat drops Aziz after five seconds. Second, on UDP, if Aziz logs in again right after a crash, the name is still taken for about four seconds. Otherwise we skip this slide.
 
 
-## Slide 17: TCP vs UDP: how they differ (55 s)
+## Slide 18: TCP vs UDP: how they differ (55 s)
 
 [Baya Chaabene] Now that you have seen both versions live, let's put the differences side by side. TCP opens a connection first, like a phone call; UDP just sends packets that travel alone. TCP delivers a stream of bytes, so we had to separate messages with a newline; with UDP one packet is one message. When a TCP packet is lost, the operating system resends it and everything behind it waits. A lost UDP packet is simply gone, so we resend only the important ones. TCP keeps the order; with UDP we number the important messages ourselves. UDP is also lighter: 8 bytes of header instead of 20. In short: TCP gives us reliability for free, with UDP we choose what is worth resending.
 
 > Likely question: Is UDP faster than TCP?
 > Answer: Without loss, no: both had about 0.9 ms round trip on one machine. The difference appears when packets are lost: TCP waits, UDP does not.
 
-## Slide 18: What the demo showed (50 s)
+## Slide 19: What the demo showed (50 s)
 
 [Baya Chaabene] And this is what you just saw. In Wireshark, TCP starts with a handshake and ends with a FIN; UDP has no handshake, the first packet is already the login, and the ACKs are messages we wrote ourselves. When a player crashed, TCP knew in the same second, because the operating system closed the connection; UDP needed four seconds of silence. With thirty percent loss, UDP skipped about a third of the updates but never stopped. TCP, in our measurements, loses nothing but freezes, with a round trip of 199 ms, because the operating system resends every byte in order. Everything else, the rules, the scores, the results, is identical, because both use the same server code. [Yassine Friaa] concludes.
 
 > Likely question: Why didn't you show TCP with 30 % loss live?
 > Answer: TCP needs real lost segments, made by the operating system's firewall with admin rights on the server PC; we measured it on one Mac instead (backup slides).
 
-## Slide 19: Who wins? It depends on the message (35 s)
+## Slide 20: Who wins? It depends on the message (35 s)
 
 [Yassine Friaa] So which one is better? It depends on the message. TCP is best when everything must arrive: the lobby, the rooms, the results. It is simple, notices crashes immediately and passes firewalls easily. UDP is best for the live game when packets are lost, because it never waits for an old picture, but we had to build reliability ourselves. Real online games do what we did: UDP for live data, plus a small reliable layer for the rest.
 
 > Likely question: If you started again, which one would you choose?
 > Answer: UDP for the game data and our reliable layer for the lobby, like we did, because the game only needs the newest STATE.
 
-## Slide 20: What we take away (25 s)
+## Slide 21: What we take away (25 s)
 
 [Yassine Friaa] To conclude. TCP is reliable and simple, but one lost packet makes everything wait. UDP never gets stuck on an old packet, but we have to decide ourselves what to resend. For a live game, UDP with a small reliable layer gives the best of both. Thank you, we are happy to answer your questions.
 
 
-## Slide 21: Under loss, TCP waits and UDP doesn't (backup, for questions)
+## Slide 22: Under loss, TCP waits and UDP doesn't (backup, for questions)
 
 [Yassine Friaa] Now our measurements. We ran three bots for two minutes, with zero, ten and thirty percent of packets lost on purpose. This chart is the round-trip time. Without loss both are under one millisecond. With loss, TCP waits: when one packet is lost, everything behind it waits until it is resent. That is called head-of-line blocking. At thirty percent loss TCP needs 199 ms; UDP stays at 0.9 ms, because it never waits.
 
@@ -167,12 +178,12 @@ Presenters: Presenter 1 = Baya Chaabene, Presenter 2 = Mohamed Aziz Souissi, Pre
 > Likely question: Why measure on one Mac?
 > Answer: It removes Wi-Fi noise, so the only difference is the loss we add on purpose.
 
-## Slide 22: UDP skips lost updates, TCP freezes (backup, for questions)
+## Slide 23: UDP skips lost updates, TCP freezes (backup, for questions)
 
 [Yassine Friaa] The other side of the story. Left: TCP never loses an update, zero percent at any loss. UDP skips the lost ones: about ten and thirty percent, exactly the loss we added. Right: freezes, moments of more than a quarter second without a new picture. TCP freezes much more often, because it waits for every lost packet. So for a live game, skipping an old picture is better than waiting for it.
 
 
-## Slide 23: How fast a crashed player is noticed (backup, for questions)
+## Slide 24: How fast a crashed player is noticed (backup, for questions)
 
 [Yassine Friaa] How fast is a crashed player noticed? With TCP, 0⁠–⁠95 ms: the operating system closes the connection. With UDP, 4.0⁠–⁠4.5 s: we have to wait for four seconds of silence. This is the price of having no connection. And our safety net works: at thirty percent loss, the important messages that were lost were resent, and none was given up.
 

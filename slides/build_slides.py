@@ -470,6 +470,52 @@ can cheat by changing the score on their own laptop.
        "If one STATE is lost, the next one is complete again, so UDP can simply skip a lost one.")])
 
 
+def s_tailscale(prs):
+    s = frame(prs, "How the 4 laptops reach each other: Tailscale", kicker="Part 1 · Design")
+    box(s, I(0.6), I(1.75), I(6.0), I(4.05), "", fill=WHITE, line=INK, line_w=2)
+    text(s, I(0.85), I(1.88), I(5.5), I(0.4),
+         [[("Tailscale network", {"bold": True}), ("  ·  a private 100.x address per laptop", {})]],
+         size=17, color=INK)
+    box(s, I(1.6), I(2.45), I(4.0), I(1.05),
+        [[(f"{first(4)}'s PC: the server", {"bold": True, "size": 19})],
+         f"{SERVER_IP}  ·  TCP {TCP_PORT}  ·  UDP {UDP_PORT}"],
+        fill=NIGHT, color=WHITE, size=16)
+    for k, name in enumerate(PLAYERS):
+        x = 0.85 + k * 1.92
+        cx = x + 0.85
+        arrow(s, I(cx), I(4.55), I(cx + (3.6 - cx) * 0.35), I(3.55), color=INK, width=2)
+        box(s, I(x), I(4.6), I(1.7), I(0.9),
+            [[(name, {"bold": True, "color": PLAYER[name], "size": 19})], "100.x.x.x"],
+            fill=WHITE, line=LINE, size=14, color=MUTED)
+    text(s, I(7.1), I(1.8), I(5.6), I(0.45), "One game packet on the Wi-Fi", size=20, bold=True)
+    layers = [("Wi-Fi, real IP addresses", WHITE, MUTED, LINE),
+              ("WireGuard tunnel (UDP), encrypted", NIGHT, WHITE, None),
+              (f"IP: 100.x → {SERVER_IP}", NIGHT_2, NIGHT_TEXT, None),
+              ("our TCP or our UDP, unchanged", TCP_LIGHT, INK, None),
+              ("our JSON: INPUT, STATE…", WHITE, INK, None)]
+    for i, (label, fill, color, line) in enumerate(layers):
+        box(s, I(7.1 + 0.22 * i), I(2.35 + 0.55 * i), I(5.6 - 0.44 * i), I(3.45 - 0.67 * i),
+            label, fill=fill, line=line, size=16, color=color, bold=i == 4,
+            anchor=MSO_ANCHOR.TOP, margin=0.15)
+    text(s, I(0.6), I(6.05), I(12.1), I(0.8), [
+        [("Why: ", {"bold": True}), ("campus Wi-Fi often blocks laptops from talking to each other. "
+                                     "Tailscale goes around it, with no router to configure.", {})]],
+        size=18, color=INK)
+    notes(s, f"""
+[Presenter 1] How do our four laptops reach each other? Campus Wi-Fi often blocks laptops from
+talking to each other, so we use Tailscale. It gives every laptop a private address starting with
+100: the server, on {first(4)}'s PC, is {SERVER_IP}, TCP on port {TCP_PORT} and UDP on port
+{UDP_PORT}. On the Wi-Fi, each of our packets travels inside an encrypted WireGuard tunnel, which
+is itself UDP. But inside the tunnel nothing changes: our TCP is still TCP, our UDP is still UDP,
+with the same JSON messages. So the comparison stays fair.
+""", [("Does Tailscale change the results?",
+       "It adds a few ms for encryption and the path. Inside, TCP still resends and waits, UDP still "
+       "skips; our 1.2 KB STATE fits Tailscale's 1280-byte packets."),
+      ("Do the laptops talk directly?",
+       "Usually yes, peer to peer; if the network blocks it, Tailscale relays through its DERP "
+       "servers. tailscale status shows which.")])
+
+
 def s_shared(prs):
     s = frame(prs, "Same game, only the transport changes", kicker="Part 1 · Design")
     box(s, I(0.6), I(1.8), I(12.1), I(1.45), [
@@ -747,8 +793,8 @@ def s_demo_plan(prs):
 what you should see, so you can check it with us. Test 1 is a normal TCP game where we crash a
 player. Test 2 is the same over UDP. Test 3 throws away thirty percent of the packets.
 [Presenter 4] runs the server PC; its log and Wireshark are on the projector, so you see every
-event with its time. The four laptops are in one Tailscale network: a private network on top of
-the Wi-Fi, so it works even when the Wi-Fi blocks laptops from talking to each other.
+event with its time. As [Presenter 1] showed, the four laptops reach each other through
+Tailscale.
 """, [("Does Tailscale change the results?",
        "It wraps every packet, TCP or UDP, in an encrypted WireGuard UDP packet, so the path adds "
        "a few ms. Inside, our TCP is still TCP and our UDP is still UDP; our 1.2 KB STATE fits "
@@ -1184,6 +1230,7 @@ def build():
     s_title(prs)
     s_game(prs)
     s_arch(prs)
+    s_tailscale(prs)
     s_shared(prs)
     s_tcp(prs)
     s_stream(prs)

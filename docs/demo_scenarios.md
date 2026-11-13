@@ -1,6 +1,6 @@
 # Demo scenarios: Friday 13 November 2026
 
-The live part of the 20-minute talk: slides 11-16 of `slides/maze_arena_tcp_vs_udp.pptx`.
+The live part of the 20-minute talk: slides 12-17 of `slides/maze_arena_tcp_vs_udp.pptx`.
 Three tests, in this order: **TCP → UDP → UDP with 30 % loss**. Each line is
 **what we do → what you should see**. Run every test **once in the morning** on the real laptops
 (section 1), then live (section 2). Matches the team's sheet *Maze Arena — Network Demonstration
@@ -10,7 +10,7 @@ Commands*.
 |---|---|---|
 | **S** (Windows) | Yassine Friaa | runs the servers; server log and Wireshark on the projector |
 | **1** | Baya Chaabene | plays **Baya** |
-| **2** | Yahia Mahfoudh | plays **Yahia**; tells the demo (slides 11-16) |
+| **2** | Yahia Mahfoudh | plays **Yahia**; tells the demo (slides 12-17) |
 | **3** | Mohamed Aziz Souissi | plays **Aziz**; first tries the name "Baya" (test 1); Aziz's game is the one killed (tests 1 and 2) |
 
 - All 4 laptops are in **one Tailscale network**. Server address: **`100.66.86.49`** (S's Tailscale IP).
@@ -95,7 +95,7 @@ on the projector). Restart the UDP server **without** `--drop` afterwards.
 
 ---
 
-## 3. Extras, only if ahead of time (slide 16)
+## 3. Extras, only if ahead of time (slide 17)
 
 **Wi-Fi off during a TCP game** (TCP server again):
 - [ ] At 0:40 left, Aziz turns the Wi-Fi off and leaves the game open → Aziz stops moving on the
@@ -117,5 +117,5 @@ kills the game and presses Enter at once → **"name already taken"** for about 
 | "game already running" | The room is in a game: wait for GAME_OVER, or use another `--room` |
 | Port busy on S | Windows `netstat -ano \| findstr 5050` (or 5051), end that python; or use another port everywhere |
 | Wireshark shows only WireGuard | Wrong interface: pick the one named **Tailscale** |
-| Running late | Skip the extras (slide 16); slide 10 already explains the Wi-Fi case |
-| Nothing works | Show the measured numbers: backup slides 21-23 |
+| Running late | Skip the extras (slide 17); slide 11 already explains the Wi-Fi case |
+| Nothing works | Show the measured numbers: backup slides 22-24 |

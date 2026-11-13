@@ -73,7 +73,7 @@ Legend: **Tested** = automated tests and/or a real multi-process run on one mach
 |---|---|---|---|---|
 | D1 | Tested · 4 PCs: **not verified yet** | Tested · 4 PCs: **not verified yet** | 3 separate bot processes + server per protocol: `tests/chaos_test.py`, `metrics/run_benchmark.py`; `test_three_clients_from_the_same_ip` (tcp, udp); 2-PC run reported by the team | Run [FOUR_PC_TEST.md](FOUR_PC_TEST.md) steps 1-6 and keep the 4 zips from `collect_logs` |
 | D2 | Tested | Tested | Shared `common/` (`game.py`, `rooms.py`, `server_core.py`); `tests/test_format_parity.py` (both deliver identical messages) | 4 PCs: not verified yet |
-| D3 | Done | Done | 20 slides + 3 backup slides `slides/maze_arena_tcp_vs_udp.pptx` (20-minute talk with live demo), built by `slides/build_slides.py` from `metrics/results.csv`; script [presentation_script.md](presentation_script.md) (~17.5 min); demo steps [demo_scenarios.md](demo_scenarios.md) | Team names: `.venv/bin/python slides/build_slides.py --team "A,B,C,D"`; re-run after LAN/internet measurements |
+| D3 | Done | Done | 21 slides + 3 backup slides `slides/maze_arena_tcp_vs_udp.pptx` (20-minute talk with live demo), built by `slides/build_slides.py` from `metrics/results.csv`; script [presentation_script.md](presentation_script.md) (~17.5 min); demo steps [demo_scenarios.md](demo_scenarios.md) | Team names: `.venv/bin/python slides/build_slides.py --team "A,B,C,D"`; re-run after LAN/internet measurements |
 | D4 | Done | Done | `README.md` (install, run, flags, Windows), `docs/JOIN.md`, `docs/demo_day_sheet.md`, launchers | — |
 | B1 | Partial · real remote player **not verified yet** | **Not done** | TCP: Cloudflare quick tunnel up; full games through the public link from the server Mac (browser client, 2026-11-06/07); `scripts/join_tcp.*`, `docs/cloudflare_tunnel.md`. UDP: playit agent online, **no UDP tunnel created** (skipped 2026-11-07) | TCP: one real player on another network (phone hotspot) plays a full game, proof with `curl -4 ifconfig.me`. UDP: create the playit UDP tunnel, then the same |
 | M1 | Tested · 4 PCs: not verified yet | Tested · 4 PCs: not verified yet | `test_login_and_duplicate_name` (tcp), `test_login_duplicate_and_full_game` (udp), `test_valid_name` | 4 PCs |
@@ -116,12 +116,12 @@ Legend: **Tested** = automated tests and/or a real multi-process run on one mach
 
 ## 3. Presentation format (D3)
 
-- 20 minutes including the live demo: 20 slides + 3 backup (measured charts, for questions): the demo is slides 11-16 (3 tests over Tailscale + Wireshark), TCP vs UDP comparison slides 17-18.
+- 20 minutes including the live demo: 21 slides + 3 backup (measured charts, for questions): Tailscale design slide 4, the demo is slides 12-17 (3 tests over Tailscale + Wireshark), TCP vs UDP comparison slides 18-19.
 - Built by `slides/build_slides.py` from `metrics/results.csv` and `metrics/charts/`
   (re-run it after new measurements); output `slides/maze_arena_tcp_vs_udp.pptx`.
   Rebuild (once: `.venv/bin/pip install -r slides/requirements.txt`):
   `.venv/bin/python slides/build_slides.py --team "Name 1,Name 2,Name 3,Name 4"`
-  (speaking order: Baya slides 1-4 and 17-18, Mohamed Aziz 5-10, Yahia 11-16, Yassine 19-20).
+  (speaking order: Baya slides 1-5 and 18-19, Mohamed Aziz 6-11, Yahia 12-17, Yassine 20-21).
 - Speaker notes and timings: [presentation_script.md](presentation_script.md).
 
 ## 4. Technical explanation (what the slides must show)
